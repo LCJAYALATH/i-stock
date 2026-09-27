@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block public %}
+<div class="grid min-h-full lg:grid-cols-2">
+  {# Brand panel #}
+  <div class="relative hidden overflow-hidden bg-ink-900 lg:flex lg:flex-col lg:justify-between lg:p-12">
+    <div class="relative flex items-center gap-3 text-white">
+      <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-ink-900"><svg width="24" height="24" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="6.5" y="2" width="7" height="7" rx="1.2" fill="currentColor" opacity=".55"/></svg></span>
+      <span class="text-xl font-extrabold tracking-tight">i-STOCK</span>
+    </div>
+    <div class="relative max-w-md">
+      <h2 class="text-[34px] font-bold leading-tight tracking-tight text-white">Know what to reorder, before you run out.</h2>
+      <p class="mt-4 text-[15px] leading-relaxed text-gray-400">Scan stock in and out, forecast demand from your own sales history, and let safety stock and reorder points update themselves.</p>
+      <ul class="mt-8 space-y-3 text-[14px] text-gray-300">
+        <li class="flex items-center gap-3"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-accent-300"><i class="bi bi-upc-scan"></i></span> Camera and USB barcode scanning</li>
+        <li class="flex items-center gap-3"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-accent-300"><i class="bi bi-graph-up-arrow"></i></span> Moving-average and regression forecasts</li>
+        <li class="flex items-center gap-3"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-accent-300"><i class="bi bi-arrow-repeat"></i></span> Automatic reorder points and draft POs</li>
+      </ul>
+    </div>
+    <p class="relative text-[12.5px] text-gray-500">{{ company_name }}</p>
+  </div>
+
+  {# Form #}
+  <div class="flex flex-col items-center justify-center bg-white px-6 py-12">
+    <div class="w-full max-w-[400px]">
+      <div class="mb-8 flex items-center gap-3 lg:hidden">
+        <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-ink-900 text-white"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="6.5" y="2" width="7" height="7" rx="1.2" fill="currentColor" opacity=".55"/></svg></span>
+        <span class="text-lg font-extrabold tracking-tight text-gray-900">i-STOCK</span>
+      </div>
+      <h1 class="text-[28px] font-bold tracking-tight text-gray-900">Welcome back</h1>
+      <p class="mt-1.5 text-[15px] text-gray-500">Sign in to {{ company_name }}</p>
+      <form method="post" class="mt-8 space-y-5">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in messages %}<div class="alert alert-{{ cat if cat in ('success','danger','warning','info') else 'info' }}">{{ msg }}</div>{% endfor %}
+        {% endwith %}
+        <div><label class="label" for="username">Username</label>
+          <input class="input h-11" id="username" name="username" autocomplete="username" required autofocus></div>
+        <div><label class="label" for="password">Password</label>
+          <input class="input h-11" id="password" type="password" name="password" autocomplete="current-password" required></div>
+        <label class="flex items-center gap-2.5 text-base2 text-gray-600" for="remember"><input class="check" type="checkbox" name="remember" id="remember"> Keep me signed in</label>
+        <button class="btn btn-primary btn-lg w-full">Sign in</button>
+      </form>
+      <p class="mt-10 text-center text-xs2 text-gray-400">Inventory management and demand forecasting</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
