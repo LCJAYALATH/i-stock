@@ -1,0 +1,117 @@
+{% macro status_badge(status) -%}
+  {% set meta = STATUS_META[status] %}<span class="badge badge-{{ meta[1] }}">{{ meta[0] }}</span>
+{%- endmacro %}
+{% macro po_badge(s) -%}
+  {% set c = {'DRAFT':'secondary','SENT':'primary','PARTIAL':'warning','RECEIVED':'success','CANCELLED':'dark'} %}
+  <span class="badge badge-{{ c.get(s,'secondary') }}">{{ s.title() }}</span>
+{%- endmacro %}
+{% macro so_badge(s) -%}
+  {% set c = {'PENDING':'warning','DISPATCHED':'success','CANCELLED':'dark'} %}
+  <span class="badge badge-{{ c.get(s,'secondary') }}">{{ s.title() }}</span>
+{%- endmacro %}
+{% macro txn_badge(t) -%}
+  {% set c = {'IN':'success','OUT':'primary','ADJUST':'warning'} %}
+  <span class="badge badge-{{ c.get(t, 'secondary') }} font-mono">{{ t }}</span>
+{%- endmacro %}
+{% macro csrf() -%}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{%- endmacro %}
+
+{% macro breadcrumb(items) -%}
+<nav class="mb-2 flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-gray-500" aria-label="Breadcrumb">
+  {% for label, href in items %}
+    {% if not loop.first %}<i class="bi bi-chevron-right text-[10px] text-gray-400"></i>{% endif %}
+    {% if href %}<a class="text-gray-500" href="{{ href }}">{{ label }}</a>{% else %}<span class="text-gray-700">{{ label }}</span>{% endif %}
+  {% endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro page_header(title, subtitle=None, status=None) -%}
+<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+  <div class="min-w-0">
+    <h1 class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[26px] font-bold leading-tight tracking-tight text-gray-900"><span class="min-w-0">{{ title }}</span>{% if status %}{{ status }}{% endif %}</h1>
+    {% if subtitle %}<p class="mt-1 text-[15px] text-gray-500">{{ subtitle }}</p>{% endif %}
+  </div>
+  <div class="flex flex-wrap items-center gap-2">{{ caller() if caller else '' }}</div>
+</div>
+{%- endmacro %}
+
+{% macro stat(label, value, href=None, note=None, prefix=None) -%}
+<{{ 'a' if href else 'div' }} class="stat"{% if href %} href="{{ href }}"{% endif %}>
+  <div class="stat-label">{{ label }}</div>
+  <div class="stat-value">{% if prefix %}<span class="mr-1 text-base2 font-normal text-gray-500">{{ prefix }}</span>{% endif %}{{ value }}</div>
+  {% if note %}<div class="stat-note">{{ note }}</div>{% endif %}
+</{{ 'a' if href else 'div' }}>
+{%- endmacro %}
+
+{% macro empty_row(cols, text) -%}
+<tr><td colspan="{{ cols }}" class="!py-8 text-center text-gray-500">{{ text }}</td></tr>
+{%- endmacro %}
+
+{# One row of a calculation worksheet: quantity | formula + working | result #}
+{% macro calc_row(name, formula, working, result, note=None) -%}
+<tr>
+  <td class="w-44 whitespace-nowrap font-semibold text-gray-900">{{ name }}{% if note %}<div class="mt-0.5 whitespace-normal text-xs2 font-normal text-gray-500">{{ note }}</div>{% endif %}</td>
+  <td class="min-w-[22rem]">
+    <div data-tex="\displaystyle {{ formula }}">{{ formula }}</div>
+    {% if working %}<div class="working" data-tex="\displaystyle {{ working }}">{{ working }}</div>{% endif %}
+  </td>
+  <td class="w-24 whitespace-nowrap text-right text-base font-semibold tabular-nums text-gray-900">{{ result }}</td>
+</tr>
+{%- endmacro %}
+
+{% macro equation(label, tex, note=None) -%}
+<div class="rounded-xl border border-gray-200 bg-white px-3 py-2">
+  <div class="mb-1 flex items-center justify-between gap-2 text-xs2"><span class="font-medium text-gray-700">{{ label }}</span>{% if note %}<span class="text-gray-500">{{ note }}</span>{% endif %}</div>
+  <div data-tex="{{ tex }}">{{ tex }}</div>
+</div>
+{%- endmacro %}
+
+{# Horizontal status stepper. steps: list of (key, label, when-or-None) #}
+{% macro progress(steps, current, cancelled=False) -%}
+{% set keys = steps|map(attribute=0)|list %}
+{% set idx = keys.index(current) if current in keys else -1 %}
+<ol class="flex flex-col overflow-hidden rounded-xl border border-gray-200/80 bg-white text-xs2 shadow-card sm:flex-row" aria-label="Progress">
+  {% for key, label, when in steps %}
+  {% set done = (not cancelled) and loop.index0 < idx %}{% set here = (not cancelled) and loop.index0 == idx %}
+  <li class="relative flex min-w-0 flex-1 items-center gap-2 px-4 py-3 {{ 'border-t border-gray-200 sm:border-l sm:border-t-0' if not loop.first }} {{ 'bg-accent-50/70' if here }}" {% if here %}aria-current="step"{% endif %}>
+    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-[11px] font-semibold
+      {{ 'border-accent-600 bg-accent-600 text-white' if done else ('border-accent-600 text-accent-700 bg-white' if here else 'border-gray-300 text-gray-400 bg-white') }}">{% if done %}<i class="bi bi-check-lg"></i>{% else %}{{ loop.index }}{% endif %}</span>
+    <span class="min-w-0"><span class="block truncate text-[13px] font-semibold {{ 'text-gray-900' if done or here else 'text-gray-500' }}">{{ label }}</span>
+      {% if when %}<span class="block truncate text-gray-500">{{ when }}</span>{% endif %}</span>
+    {% if here %}<span class="absolute bottom-0 left-0 top-0 w-0.5 bg-accent-600 sm:left-0 sm:right-0 sm:top-auto sm:h-0.5 sm:w-auto"></span>{% endif %}
+  </li>
+  {% endfor %}
+  {% if cancelled %}<li class="flex items-center gap-2 border-t border-gray-200 bg-gray-50 px-3 py-2 font-medium text-gray-700 sm:border-l sm:border-t-0"><i class="bi bi-x-circle text-gray-500"></i> Cancelled</li>{% endif %}
+</ol>
+{%- endmacro %}
+
+{# Card footer pager for a Flask-SQLAlchemy Pagination object #}
+{% macro pager(page, endpoint, noun='rows') -%}
+{% if page.total %}
+<div class="card-footer justify-between">
+  <span class="text-xs2 text-gray-500">Showing <span class="font-medium tabular-nums text-gray-900">{{ (page.page - 1) * page.per_page + 1 }}–{{ [page.page * page.per_page, page.total]|min }}</span> of <span class="font-medium tabular-nums text-gray-900">{{ '{:,}'.format(page.total) }}</span> {{ noun }}</span>
+  {% if page.pages > 1 %}
+  {% set args = request.args.to_dict() %}
+  <nav class="flex items-center gap-1" aria-label="Pagination">
+    {% if page.has_prev %}{% set _ = args.update({'page': page.prev_num}) %}<a class="btn btn-secondary btn-sm" href="{{ url_for(endpoint, **args) }}" aria-label="Previous page"><i class="bi bi-chevron-left"></i></a>
+    {% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40"><i class="bi bi-chevron-left"></i></span>{% endif %}
+    {% for n in page.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+      {% if n is none %}<span class="px-1 text-gray-400">…</span>
+      {% elif n == page.page %}<span class="btn btn-sm min-w-[32px] border-accent-600 bg-accent-600 px-2 tabular-nums text-white" aria-current="page">{{ n }}</span>
+      {% else %}{% set _ = args.update({'page': n}) %}<a class="btn btn-ghost btn-sm min-w-[32px] px-2 tabular-nums" href="{{ url_for(endpoint, **args) }}">{{ n }}</a>{% endif %}
+    {% endfor %}
+    {% if page.has_next %}{% set _ = args.update({'page': page.next_num}) %}<a class="btn btn-secondary btn-sm" href="{{ url_for(endpoint, **args) }}" aria-label="Next page"><i class="bi bi-chevron-right"></i></a>
+    {% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40"><i class="bi bi-chevron-right"></i></span>{% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{# Status filter tabs with counts #}
+{% macro status_tabs(endpoint, statuses, counts) -%}
+{% set cur = request.args.get('status') %}
+<nav class="tabs mb-4" aria-label="Filter by status">
+  <a class="tab {% if not cur %}tab-active{% endif %}" href="{{ url_for(endpoint) }}">All <span class="ml-1.5 rounded-full bg-gray-100 px-2 py-px text-[11.5px] tabular-nums text-gray-600">{{ counts.values()|sum }}</span></a>
+  {% for s in statuses %}<a class="tab {% if cur == s %}tab-active{% endif %}" href="{{ url_for(endpoint, status=s) }}">{{ s.title() }} <span class="ml-1.5 rounded-full bg-gray-100 px-2 py-px text-[11.5px] tabular-nums text-gray-600">{{ counts.get(s, 0) }}</span></a>{% endfor %}
+</nav>
+{%- endmacro %}
