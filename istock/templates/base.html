@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}i-STOCK{% endblock %} · i-STOCK</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%230d1222'/%3E%3Crect x='4' y='11' width='5.5' height='5.5' rx='1' fill='%23fff'/%3E%3Crect x='10.5' y='11' width='5.5' height='5.5' rx='1' fill='%23fff'/%3E%3Crect x='7.25' y='4' width='5.5' height='5.5' rx='1' fill='%23fff' opacity='.6'/%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com/3.4.16?plugins=forms"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+          },
+          colors: {
+            /* Indigo accent */
+            accent: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' },
+            /* Cool slate neutrals replace the default gray everywhere */
+            gray: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+            ink: { 800: '#151b2e', 900: '#0d1222', 950: '#090d19' },
+          },
+          fontSize: { xs2: ['12.5px', '18px'], base2: ['14px', '22px'] },
+          boxShadow: {
+            card: '0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06)',
+            pop: '0 10px 30px -10px rgba(15,23,42,.25)',
+            btn: '0 1px 2px rgba(15,23,42,.08)',
+          },
+        },
+      },
+    };
+  </script>
+  <style type="text/tailwindcss">
+    @layer base {
+      html { -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+      body { @apply bg-[#f5f6fa] text-base2 text-gray-700; }
+      h1, h2, h3 { @apply tracking-tight text-gray-900; }
+      a { @apply text-accent-600 hover:text-accent-700; }
+      a.btn, a.nav-link, a.stat, a.plain { @apply no-underline hover:no-underline; }
+      ::selection { @apply bg-accent-100 text-accent-900; }
+    }
+    @layer components {
+      /* Buttons: rounded, 36px tall */
+      .btn { @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-4 text-base2 font-semibold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-accent-500/20 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50; }
+      .btn-primary { @apply border-accent-600 bg-accent-600 text-white shadow-btn hover:border-accent-700 hover:bg-accent-700 hover:text-white; }
+      .btn-secondary { @apply border-gray-200 bg-white text-gray-700 shadow-btn hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900; }
+      .btn-success { @apply border-emerald-600 bg-emerald-600 text-white shadow-btn hover:border-emerald-700 hover:bg-emerald-700 hover:text-white; }
+      .btn-warning { @apply border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100; }
+      .btn-dark { @apply border-gray-900 bg-gray-900 text-white hover:bg-gray-800 hover:text-white; }
+      .btn-danger { @apply border-red-200 bg-white text-red-600 shadow-btn hover:border-red-300 hover:bg-red-50 hover:text-red-700; }
+      .btn-ghost { @apply border-transparent bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900; }
+      .btn-sm { @apply h-8 rounded-lg px-3 text-xs2; }
+      .btn-lg { @apply h-11 rounded-xl px-5 text-[15px]; }
+
+      /* Panels */
+      .card { @apply rounded-xl border border-gray-200/80 bg-white shadow-card; }
+      .card-header { @apply flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-t-xl border-b border-gray-100 px-5 py-3; }
+      .card-title { @apply text-[15px] font-semibold tracking-tight text-gray-900; }
+      .card-sub { @apply text-xs2 text-gray-500; }
+      .card-body { @apply p-5; }
+      .card-footer { @apply flex flex-wrap items-center gap-2 rounded-b-xl border-t border-gray-100 bg-gray-50/70 px-5 py-3; }
+      .card > .table-wrap:first-child, .card > form:first-child > .table-wrap:first-child { @apply rounded-t-xl; }
+      .card > .table-wrap:last-child { @apply rounded-b-xl; }
+
+      /* Status labels: pills */
+      .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs2 font-semibold ring-1 ring-inset; }
+      .badge-success { @apply bg-emerald-50 text-emerald-700 ring-emerald-600/20; }
+      .badge-danger { @apply bg-red-50 text-red-700 ring-red-600/20; }
+      .badge-warning { @apply bg-amber-50 text-amber-800 ring-amber-600/25; }
+      .badge-info { @apply bg-sky-50 text-sky-700 ring-sky-600/20; }
+      .badge-primary { @apply bg-accent-50 text-accent-700 ring-accent-600/20; }
+      .badge-secondary { @apply bg-gray-100 text-gray-600 ring-gray-500/15; }
+      .badge-dark { @apply bg-gray-800 text-white ring-gray-800; }
+      .badge-light { @apply bg-white text-gray-600 ring-gray-300; }
+      .swatch { @apply inline-block h-2.5 w-2.5 shrink-0 rounded-full; }
+
+      /* Tables */
+      .table-wrap { @apply overflow-x-auto; }
+      .table { @apply w-full border-collapse text-base2; }
+      .table thead th { @apply whitespace-nowrap border-b border-gray-100 bg-gray-50/80 px-4 py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-wider text-gray-500; }
+      .table tbody td { @apply border-b border-gray-100 px-4 py-3 align-middle; }
+      .table tbody tr:last-child td { @apply border-b-0; }
+      .table tfoot th, .table tfoot td { @apply border-t border-gray-200 bg-gray-50/70 px-4 py-3 font-semibold text-gray-900; }
+      .table-hover tbody tr { @apply transition-colors; }
+      .table-hover tbody tr:hover { @apply bg-accent-50/40; }
+      .table-sm tbody td { @apply py-2; }
+      .num { @apply text-right tabular-nums; }
+      .table thead th.num, .table thead th.text-right, .calc th.text-right { text-align: right; }
+      .table thead th.text-center { text-align: center; }
+      .mono { @apply whitespace-nowrap font-mono text-[12.5px]; }
+      .muted { @apply text-gray-500; }
+
+      /* Forms */
+      .label { @apply mb-1.5 block text-[13px] font-semibold text-gray-700; }
+      .input { @apply block h-10 w-full rounded-lg border-gray-200 bg-white px-3 py-0 text-base2 text-gray-900 shadow-btn transition placeholder:text-gray-400 hover:border-gray-300 focus:border-accent-500 focus:ring-4 focus:ring-accent-500/15 disabled:bg-gray-50 disabled:text-gray-400 read-only:bg-gray-50; }
+      select.input { @apply pr-9; }
+      textarea.input { @apply py-2; }
+      .input-sm { @apply h-8 rounded-md text-xs2; }
+      .help { @apply mt-1.5 text-xs2 text-gray-500; }
+      .check { @apply h-4 w-4 rounded border-gray-300 text-accent-600 focus:ring-accent-500/30; }
+      .section-title { @apply text-xs2 font-semibold text-gray-900; }
+      .req { @apply text-red-500; }
+      /* Two-column form sections: description left, fields right */
+      .form-section { @apply grid grid-cols-1 gap-x-10 gap-y-5 border-b border-gray-100 px-6 py-6 lg:grid-cols-3; }
+      .form-section-head h2 { @apply text-[15px] font-semibold text-gray-900; }
+      .form-section-head p { @apply mt-1 text-base2 text-gray-500; }
+      .form-fields { @apply grid grid-cols-1 content-start gap-5 sm:grid-cols-6 lg:col-span-2; }
+      .kv { @apply grid grid-cols-[minmax(0,8rem)_1fr] gap-x-4 gap-y-2.5 text-base2; }
+      .kv dt { @apply text-gray-500; }
+      .kv dd { @apply min-w-0 font-medium text-gray-900; }
+
+      /* Alerts */
+      .alert { @apply flex items-start gap-3 rounded-xl border px-4 py-3 text-base2 shadow-card; }
+      .alert-success { @apply border-emerald-200 bg-emerald-50 text-emerald-900; }
+      .alert-danger { @apply border-red-200 bg-red-50 text-red-900; }
+      .alert-warning { @apply border-amber-200 bg-amber-50 text-amber-900; }
+      .alert-info { @apply border-sky-200 bg-sky-50 text-sky-900; }
+      .alert-close { @apply ml-auto rounded-md text-current opacity-50 hover:opacity-100; }
+
+      /* Key/value rows */
+      .list-row { @apply flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 last:border-b-0; }
+      a.list-row { @apply text-gray-800 no-underline transition-colors hover:bg-accent-50/40 hover:no-underline; }
+
+      /* KPI tiles */
+      .stats { @apply grid gap-4; }
+      .stat { @apply block rounded-xl border border-gray-200/80 bg-white px-5 py-4 shadow-card; }
+      a.stat { @apply text-gray-800 transition hover:-translate-y-px hover:border-accent-200 hover:shadow-pop; }
+      .stat-label { @apply text-[13px] font-medium text-gray-500; }
+      .stat-value { @apply mt-1 text-[26px] font-bold leading-8 tracking-tight tabular-nums text-gray-900; }
+      .stat-note { @apply mt-1 text-xs2 text-gray-500; }
+      .metric-grid { @apply grid grid-cols-2 gap-3 sm:grid-cols-4; }
+      .metric { @apply rounded-xl border border-gray-200/80 bg-white px-4 py-3 shadow-card; }
+      .metric .k { @apply text-xs2 font-medium text-gray-500; }
+      .metric .v { @apply mt-0.5 text-lg font-bold tracking-tight tabular-nums text-gray-900; }
+
+      /* Segmented tabs */
+      .tabs { @apply inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-gray-200/80 bg-white p-1 shadow-card; }
+      .tab { @apply rounded-lg px-3.5 py-1.5 text-base2 font-semibold text-gray-600 no-underline transition hover:bg-gray-100 hover:text-gray-900 hover:no-underline; }
+      .tab-active { @apply bg-accent-600 text-white hover:bg-accent-600 hover:text-white; }
+      .tab-active span { @apply bg-white/20 text-white !important; }
+
+      /* Sidebar (dark) */
+      .nav-link { @apply relative mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-base2 font-medium text-gray-400 transition hover:bg-white/5 hover:text-white; }
+      .nav-link i { @apply text-[16px] text-gray-500 transition; }
+      .nav-link:hover i { @apply text-gray-300; }
+      .nav-link.active { @apply bg-white/10 text-white; }
+      .nav-link.active::before { content: ""; @apply absolute -left-3 bottom-1.5 top-1.5 w-1 rounded-r-full bg-accent-400; }
+      .nav-link.active i { @apply text-accent-300; }
+      .nav-section { @apply mb-1.5 mt-6 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500; }
+
+      /* Calculation worksheet */
+      .calc { @apply w-full border-collapse text-base2; }
+      .calc th { @apply border-b border-gray-100 bg-gray-50/80 px-4 py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-wider text-gray-500; }
+      .calc td { @apply border-b border-gray-100 px-4 py-3.5 align-top; }
+      .calc tr:last-child td { @apply border-b-0; }
+      .calc .working { @apply mt-1 text-gray-600; }
+      .calc .katex { font-size: 1.05em; }
+    }
+  </style>
+  <style>
+    .chart-box { position: relative; height: 280px; }
+    @media (max-width: 640px) { .chart-box { height: 220px; } }
+    #reader { width: 100%; }
+    #reader video { display: block; width: 100% !important; height: auto; border-radius: 4px; }
+    #reader img[alt="Info icon"], #reader__dashboard_section_csr span { display: none !important; }
+    .katex-display { margin: .25rem 0 !important; text-align: left !important; }
+    input[type=number].no-spin::-webkit-inner-spin-button, input[type=number].no-spin::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number].no-spin { -moz-appearance: textfield; }
+    .katex-display > .katex { text-align: left !important; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="h-full">
+{% if current_user.is_authenticated %}
+{% set ep = request.endpoint or '' %}
+{% macro nav(endpoint, icon, label, prefix=None) -%}
+  <a class="nav-link {% if ep == endpoint or (prefix and ep.startswith(prefix)) %}active{% endif %}" href="{{ url_for(endpoint) }}">
+    <i class="bi bi-{{ icon }}"></i><span>{{ label }}</span></a>
+{%- endmacro %}
+
+<div id="sidebarBackdrop" class="fixed inset-0 z-40 hidden bg-gray-900/50 backdrop-blur-sm lg:hidden" data-sidebar-close></div>
+
+<div class="flex min-h-full">
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex w-64 -translate-x-full flex-col bg-ink-900 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0" aria-label="Main navigation">
+    <div class="flex h-[72px] shrink-0 items-center justify-between border-b border-white/[0.06] px-5">
+      <a href="{{ url_for('main.dashboard') }}" class="plain flex items-center gap-3 text-white">
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-ink-900"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="6.5" y="2" width="7" height="7" rx="1.2" fill="currentColor"/></svg></span>
+        <span class="leading-none"><span class="block text-[16px] font-bold tracking-tight">i-STOCK</span><span class="mt-1 block text-[11px] font-medium tracking-wide text-gray-500">Inventory system</span></span>
+      </a>
+      <button type="button" class="rounded-lg p-1.5 text-gray-400 hover:bg-white/10 hover:text-white lg:hidden" data-sidebar-close aria-label="Close menu"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-3 pb-3 pt-4">
+      {{ nav('main.dashboard', 'grid', 'Dashboard') }}
+      {{ nav('main.scan', 'upc-scan', 'Scan in / out') }}
+      {{ nav('inventory.item_list', 'box', 'Inventory', 'inventory.item') }}
+      {{ nav('main.transactions', 'list-ul', 'Stock ledger') }}
+      <div class="nav-section">Orders</div>
+      {{ nav('orders.so_list', 'truck', 'Client orders', 'orders.so') }}
+      {{ nav('orders.po_list', 'file-earmark-text', 'Purchase orders', 'orders.po') }}
+      <div class="nav-section">Partners</div>
+      {{ nav('partners.suppliers', 'building', 'Suppliers', 'partners.supplier') }}
+      {{ nav('partners.clients', 'people', 'Clients', 'partners.client') }}
+      <div class="nav-section">Planning</div>
+      {% if current_user.has_role('manager') %}{{ nav('analytics.index', 'graph-up', 'Analytics') }}{% endif %}
+      {{ nav('analytics.reports_index', 'download', 'Reports') }}
+      {% if current_user.has_role('manager') %}
+      <div class="nav-section">Administration</div>
+      {{ nav('inventory.masters', 'tags', 'Categories & bins') }}
+      {% if current_user.has_role('admin') %}
+      {{ nav('analytics.users', 'person-gear', 'Users', 'analytics.user') }}
+      {{ nav('analytics.settings', 'gear', 'Settings') }}
+      {% endif %}
+      {% endif %}
+    </nav> 
+
+    <div class="border-t border-white/10 px-3 py-2">
+      <div class="flex items-center gap-2.5 rounded-lg px-1.5 py-1">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11.5px] font-semibold text-white">{{ (current_user.full_name or current_user.username)[:1]|upper }}</span>
+        <span class="min-w-0 flex-1 leading-tight">
+          <span class="block truncate text-[12.5px] font-semibold text-white">{{ current_user.full_name }}</span>
+          <span class="block truncate text-[11px] text-gray-400">{{ current_user.role_label }}</span>
+        </span>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-red-500/15 hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50" title="Sign out" aria-label="Sign out"><i class="bi bi-box-arrow-right text-[14px]"></i></button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <div class="flex min-w-0 flex-1 flex-col">
+    <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4 lg:hidden">
+      <button type="button" class="-ml-1 rounded-lg p-1.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900" data-sidebar-open aria-label="Open menu"><i class="bi bi-list text-xl leading-none"></i></button>
+      <a href="{{ url_for('main.dashboard') }}" class="plain flex items-center gap-2 text-gray-900">
+        <span class="flex h-7 w-7 items-center justify-center rounded-md bg-ink-900 text-white"><svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1.2" fill="currentColor"/><rect x="6.5" y="2" width="7" height="7" rx="1.2" fill="currentColor"/></svg></span>
+        <span class="text-[15px] font-bold tracking-tight">i-STOCK</span></a>
+      <a class="btn btn-secondary btn-sm ml-auto" href="{{ url_for('main.scan') }}" aria-label="Scan"><i class="bi bi-upc-scan"></i></a>
+    </header>
+    <main class="min-w-0 flex-1">
+      <div class="mx-auto max-w-[1440px] px-4 py-6 lg:px-8 lg:py-8">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}<div class="mb-4 space-y-2">
+          {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat if cat in ('success','danger','warning','info') else 'info' }}" role="alert">
+            <div class="flex-1">{{ msg }}</div>
+            <button type="button" class="alert-close" data-dismiss aria-label="Dismiss"><i class="bi bi-x"></i></button>
+          </div>
+          {% endfor %}</div>{% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</div>
+{% else %}
+  {% block public %}{% endblock %}
+{% endif %}
+
+<script>
+(function () {
+  const sb = document.getElementById('sidebar'), bd = document.getElementById('sidebarBackdrop');
+  const open = (on) => { if (!sb) return; sb.classList.toggle('-translate-x-full', !on); bd.classList.toggle('hidden', !on); };
+  document.querySelectorAll('[data-sidebar-open]').forEach((b) => b.addEventListener('click', () => open(true)));
+  document.querySelectorAll('[data-sidebar-close]').forEach((b) => b.addEventListener('click', () => open(false)));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') open(false); });
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-dismiss]'); if (b) b.closest('.alert').remove(); });
+})();
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+  /* Typeset every element carrying data-tex with KaTeX. */
+  window.addEventListener('load', function () {
+    if (!window.katex) return;
+    document.querySelectorAll('[data-tex]').forEach(function (el) {
+      try { katex.render(el.getAttribute('data-tex'), el, { displayMode: el.hasAttribute('data-display'), throwOnError: false }); }
+      catch (e) { el.textContent = el.getAttribute('data-tex'); }
+    });
+  });
+</script>
+{% if livereload %}
+<script>
+  /* Dev only: reload when templates/static change or the server restarts.
+     Short polling, not EventSource, so no tab holds a connection open. */
+  (function () {
+    let token = null;
+    async function check() {
+      if (document.visibilityState === 'visible') {
+        try {
+          const t = (await (await fetch('/__livereload', { cache: 'no-store' })).json()).token;
+          if (token && t !== token) return location.reload();
+          token = t;
+        } catch (e) { /* server restarting: keep polling */ }
+      }
+      setTimeout(check, 1000);
+    }
+    check();
+  })();
+</script>
+{% endif %}
+{% block scripts %}{% endblock %}
+</body>
+</html>
