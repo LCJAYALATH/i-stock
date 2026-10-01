@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Error {{ code }}{% endblock %}
+{% block content %}
+<div class="card mx-auto mt-10 max-w-lg">
+  <div class="card-body">
+    <p class="font-mono text-xs2 font-medium text-gray-500">Error {{ code }}</p>
+    <h1 class="mt-1 text-lg font-semibold">{{ message }}</h1>
+    <p class="mt-2 text-base2 text-gray-600">{% if code == 403 %}Your role does not have access to this page. Ask an administrator if you need it.{% elif code == 404 %}The link may be out of date, or the record was removed.{% else %}Something went wrong on our side. Try again in a moment.{% endif %}</p>
+  </div>
+  <div class="card-footer"><a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">Back to dashboard</a><button type="button" class="btn btn-ghost" onclick="history.back()">Go back</button></div>
+</div>
+{% endblock %}
+{% block public %}
+<div class="flex min-h-full items-center justify-center px-4"><div class="card w-full max-w-lg">
+  <div class="card-body"><p class="text-xs2 font-medium text-gray-500">Error {{ code }}</p><h1 class="mt-1 text-lg font-semibold">{{ message }}</h1></div>
+  <div class="card-footer"><a class="btn btn-primary" href="{{ url_for('auth.login') }}">Sign in</a></div>
+</div></div>
+{% endblock %}
