@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, txn_badge, page_header, csrf, empty_row, stat with context %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% call page_header("Dashboard", "Stock position and replenishment alerts") %}
+  {% if current_user.has_role('manager') %}
+  <form method="post" action="{{ url_for('orders.po_generate') }}">{{ csrf() }}
+    <button class="btn btn-secondary">Generate reorder POs</button></form>
+  {% endif %}
+  <a class="btn btn-primary" href="{{ url_for('main.scan') }}"><i class="bi bi-upc-scan"></i> Scan stock</a>
+{% endcall %}
+
+<div class="stats mb-5 grid-cols-2 md:grid-cols-4">
+  {{ stat('Active SKUs', kpi.skus|num, url_for('inventory.item_list')) }}
+  {{ stat('Need reordering', kpi.alerts|num, url_for('inventory.item_list', status='REORDER')) }}
+  {{ stat('Out of stock', kpi.out|num, url_for('inventory.item_list', status='OUT')) }}
+  {{ stat('Open purchase orders', kpi.open_pos|num, url_for('orders.po_list'), (kpi.draft_pos ~ ' awaiting approval') if kpi.draft_pos else None) }}
+  {{ stat('Units on hand', kpi.units_on_hand|num) }}
+  {{ stat('Units shipped, 30 days', kpi.units_30d|num) }}
+  {% if current_user.can_view_financials %}
+  {{ stat('Stock value', kpi.stock_value|num, prefix=currency) }}
+  {{ stat('Sales, 30 days', kpi.revenue_30d|num, prefix=currency) }}
+  {% else %}
+  {{ stat('Orders to pick', kpi.pending_orders, url_for('orders.so_list', status='PENDING')) }}
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-1 gap-5 xl:grid-cols-3">
+  <div class="space-y-5 xl:col-span-2">
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">Reorder alerts</h2>
+        <span class="card-sub">Items at or below reorder point, <span data-tex="\mathrm{ROP} = \bar d L + SS">ROP = d·L + SS</span></span>
+      </div>
+      <div class="table-wrap">
+        <table class="table table-hover">
+          <thead><tr><th>Item</th><th class="num">On hand</th><th class="num" title="Safety stock">SS</th><th class="num" title="Reorder point">ROP</th><th class="num">Order qty</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for i in alerts[:12] %}
+            <tr>
+              <td class="min-w-[11rem]"><a class="font-medium" href="{{ url_for('inventory.item_detail', item_id=i.id) }}">{{ i.name }}</a><div class="mono text-xs2 text-gray-500">{{ i.sku }}</div></td>
+              <td class="num font-medium text-gray-900">{{ i.quantity_on_hand }}</td>
+              <td class="num">{{ i.safety_stock }}</td>
+              <td class="num">{{ i.reorder_point }}</td>
+              <td class="num">{{ i.recommended_qty }}</td>
+              <td class="whitespace-nowrap">{{ status_badge(statuses[i.id]) }}{% if on_po[i.id] %} <span class="badge badge-light" title="Already on an open purchase order">On PO</span>{% endif %}</td>
+            </tr>
+          {% else %}
+            {{ empty_row(6, 'All items are above their reorder points.') }}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if alerts|length > 12 %}<div class="card-footer"><a href="{{ url_for('inventory.item_list', status='REORDER') }}">View all {{ alerts|length }} alerts</a></div>{% endif %}
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Units shipped per day</h2><span class="card-sub">Last 30 days</span></div>
+      <div class="card-body"><div class="chart-box"><canvas id="salesChart"></canvas></div></div>
+    </section>
+  </div>
+
+  <div class="space-y-5">
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Stock status</h2></div>
+      <table class="table table-hover">
+        <tbody>
+        {% set sw = {'danger':'bg-red-600','warning':'bg-amber-500','success':'bg-emerald-600','info':'bg-sky-600','secondary':'bg-gray-400'} %}
+        {% for key in ['OUT','CRITICAL','REORDER','OK','OVERSTOCK','NO_SALES'] %}
+          <tr><td><a class="plain flex items-center gap-2 text-gray-800 hover:text-accent-700" href="{{ url_for('inventory.item_list', status=key) }}"><span class="swatch {{ sw[STATUS_META[key][1]] }}"></span>{{ STATUS_META[key][0] }}</a></td>
+            <td class="num font-medium text-gray-900">{{ counts[key] }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Expiring within 30 days</h2></div>
+      <table class="table">
+        <tbody>
+        {% for b in expiring %}
+          <tr><td><a href="{{ url_for('inventory.item_detail', item_id=b.item_id) }}">{{ b.item.name }}</a><div class="text-xs2 text-gray-500">Batch <span class="mono">{{ b.batch_no }}</span> · {{ b.quantity }} {{ b.item.unit }}</div></td>
+            <td class="num whitespace-nowrap {{ 'font-medium text-red-700' if b.days_to_expiry < 0 else ('text-amber-700' if b.days_to_expiry <= 14 else '') }}">{{ 'Expired' if b.days_to_expiry < 0 else b.days_to_expiry ~ ' days' }}</td></tr>
+        {% else %}{{ empty_row(2, 'No batches expiring soon.') }}{% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Fastest movers</h2><span class="card-sub">Avg units / day</span></div>
+      <table class="table">
+        <tbody>
+        {% for i in top %}<tr><td><a href="{{ url_for('inventory.item_detail', item_id=i.id) }}">{{ i.name }}</a></td><td class="num">{{ i.avg_daily_sales|num(1) }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Recent movements</h2><a class="text-xs2" href="{{ url_for('main.transactions') }}">Open ledger</a></div>
+      <table class="table table-sm">
+        <tbody>
+        {% for t in recent %}<tr><td class="w-16">{{ txn_badge(t.txn_type) }}</td><td class="mono">{{ t.item.sku }}</td><td class="num font-medium text-gray-900">{{ t.quantity }}</td><td class="num whitespace-nowrap text-xs2 text-gray-500">{{ t.created_at|dt('%d %b %H:%M') }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+const d = {{ chart|tojson }};
+new Chart(document.getElementById('salesChart'), {
+  type: 'bar',
+  data: { labels: d.labels, datasets: [{ label: 'Units shipped', data: d.units, backgroundColor: ISTOCK_COLORS.accent, maxBarThickness: 18 }] },
+  options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+});
+</script>
+{% endblock %}
