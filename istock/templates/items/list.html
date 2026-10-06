@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, page_header, empty_row with context %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+{% call page_header("Inventory", items|length ~ " items") %}
+  <a class="btn btn-secondary" href="{{ url_for('inventory.labels') }}" target="_blank">Print labels</a>
+  {% if current_user.has_role('manager') %}<a class="btn btn-primary" href="{{ url_for('inventory.item_new') }}">New item</a>{% endif %}
+{% endcall %}
+<form class="card mb-4 p-3" method="get">
+  <div class="grid grid-cols-2 gap-3 md:grid-cols-12">
+    <div class="relative col-span-2 md:col-span-4"><i class="bi bi-search pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-gray-400"></i>
+      <input class="input pl-8" name="q" value="{{ request.args.q or '' }}" placeholder="Search SKU, name or barcode" aria-label="Search"></div>
+    <div class="md:col-span-2"><select class="input" name="category" aria-label="Category"><option value="">All categories</option>
+      {% for c in categories %}<option value="{{ c.id }}" {% if request.args.category == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+    <div class="md:col-span-2"><select class="input" name="supplier" aria-label="Supplier"><option value="">All suppliers</option>
+      {% for s in suppliers %}<option value="{{ s.id }}" {% if request.args.supplier == s.id|string %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+    <div class="md:col-span-2"><select class="input" name="status" aria-label="Status"><option value="">Any status</option>
+      {% for k, meta in STATUS_META.items() %}<option value="{{ k }}" {% if request.args.status == k %}selected{% endif %}>{{ meta[0] }}</option>{% endfor %}</select></div>
+    <div class="flex gap-2 md:col-span-2"><button class="btn btn-secondary flex-1">Apply</button><a class="btn btn-ghost" href="{{ url_for('inventory.item_list') }}">Reset</a></div>
+  </div>
+</form>
+<div class="card"><div class="table-wrap">
+<table class="table table-hover">
+  <thead><tr><th>SKU</th><th>Item</th><th>Bin</th><th class="num">On hand</th><th class="num">Avg/day</th><th class="num">Safety</th><th class="num">ROP</th>
+    {% if current_user.can_view_financials %}<th class="num">Value ({{ currency }})</th>{% endif %}<th>Status</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+  <tr>
+    <td class="mono text-gray-500">{{ i.sku }}</td>
+    <td><a href="{{ url_for('inventory.item_detail', item_id=i.id) }}">{{ i.name }}</a><div class="text-xs2 text-gray-500">{{ i.category.name if i.category else '' }}{% if i.supplier %} · {{ i.supplier.name }}{% endif %}</div></td>
+    <td class="mono">{{ i.location.code if i.location else '—' }}</td>
+    <td class="num font-semibold text-gray-900">{{ i.quantity_on_hand }} <span class="text-xs2 font-normal text-gray-400">{{ i.unit }}</span></td>
+    <td class="num">{{ i.avg_daily_sales|num(1) }}</td>
+    <td class="num">{{ i.safety_stock }}</td>
+    <td class="num">{{ i.reorder_point }}</td>
+    {% if current_user.can_view_financials %}<td class="num">{{ i.stock_value|money }}</td>{% endif %}
+    <td>{% if i.is_active %}{{ status_badge(stock_status(i)) }}{% else %}<span class="badge badge-dark">Inactive</span>{% endif %}</td>
+  </tr>
+  {% else %}{{ empty_row(9, 'No items match the filters.') }}{% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}
