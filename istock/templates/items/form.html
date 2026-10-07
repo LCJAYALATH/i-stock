@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, breadcrumb, csrf with context %}
+{% block title %}{{ 'Edit ' ~ item.sku if item.id else 'New item' }}{% endblock %}
+{% block content %}
+{{ breadcrumb([('Inventory', url_for('inventory.item_list'))] + ([(item.sku, url_for('inventory.item_detail', item_id=item.id)), ('Edit', None)] if item.id else [('New item', None)])) }}
+{% call page_header('Edit ' ~ item.name if item.id else 'New item', 'Catalogue details and replenishment parameters' if item.id else 'Add an item to the catalogue') %}{% endcall %}
+<form method="post" class="card max-w-5xl">{{ csrf() }}
+  <div class="form-section">
+    <div class="form-section-head"><h2>Catalogue</h2><p>How the item is identified, stored and priced.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-3"><label class="label" for="sku">SKU <span class="req">*</span></label><input class="input font-mono" id="sku" name="sku" value="{{ item.sku or '' }}" required></div>
+      <div class="sm:col-span-3"><label class="label" for="barcode">Barcode (EAN/UPC)</label><input class="input font-mono" id="barcode" name="barcode" value="{{ item.barcode or '' }}" placeholder="Leave blank to use SKU"></div>
+      <div class="sm:col-span-6"><label class="label" for="name">Name <span class="req">*</span></label><input class="input" id="name" name="name" value="{{ item.name or '' }}" required></div>
+      <div class="sm:col-span-4"><label class="label" for="description">Description</label><input class="input" id="description" name="description" value="{{ item.description or '' }}"></div>
+      <div class="sm:col-span-2"><label class="label" for="unit">Unit</label><input class="input" id="unit" name="unit" value="{{ item.unit or 'pcs' }}"></div>
+      <div class="sm:col-span-3"><label class="label" for="category_id">Category</label><select class="input" id="category_id" name="category_id"><option value="">—</option>
+        {% for c in categories %}<option value="{{ c.id }}" {% if item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+      <div class="sm:col-span-3"><label class="label" for="location_id">Warehouse bin</label><select class="input" id="location_id" name="location_id"><option value="">—</option>
+        {% for l in locations %}<option value="{{ l.id }}" {% if item.location_id == l.id %}selected{% endif %}>{{ l.code }}{% if l.zone %} · {{ l.zone }}{% endif %}</option>{% endfor %}</select></div>
+      <div class="sm:col-span-6"><label class="label" for="supplier_id">Supplier</label><select class="input" id="supplier_id" name="supplier_id"><option value="">—</option>
+        {% for s in suppliers %}<option value="{{ s.id }}" {% if item.supplier_id == s.id %}selected{% endif %}>{{ s.name }} ({{ s.lead_time_days|num(1) }} d lead time)</option>{% endfor %}</select></div>
+      <div class="sm:col-span-3"><label class="label" for="unit_cost">Unit cost ({{ currency }})</label><input class="input" id="unit_cost" type="number" step="0.01" min="0" name="unit_cost" value="{{ item.unit_cost or 0 }}"></div>
+      <div class="sm:col-span-3"><label class="label" for="unit_price">Unit price ({{ currency }})</label><input class="input" id="unit_price" type="number" step="0.01" min="0" name="unit_price" value="{{ item.unit_price or 0 }}"></div>
+    </div>
+  </div>
+  <div class="form-section border-b-0">
+    <div class="form-section-head"><h2>Replenishment parameters</h2><p>Inputs to the safety-stock formula
+      <span class="mt-2 block" data-tex="SS = Z\sqrt{L\,\sigma_d^{2} + \bar d^{\,2}\sigma_L^{2}}">SS = Z√(Lσ² + d²σL²)</span></p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-3"><label class="label" for="min_stock">Minimum safety stock</label><input class="input" id="min_stock" type="number" min="0" name="min_stock" value="{{ item.min_stock or 0 }}">
+        <p class="help">Floor applied to the calculated safety stock.</p></div>
+      <div class="sm:col-span-3"><label class="label" for="service_level">Service level</label><input class="input" id="service_level" type="number" step="0.001" min="0.5" max="0.999" name="service_level" value="{{ item.service_level or '' }}" placeholder="Default">
+        <p class="help">e.g. 0.95 = 95% chance of no stockout per cycle (sets <span data-tex="Z">Z</span>).</p></div>
+      <div class="sm:col-span-3"><label class="label" for="lead_time_override">Lead time override (days)</label><input class="input" id="lead_time_override" type="number" step="0.5" min="0" name="lead_time_override" value="{{ item.lead_time_override or '' }}" placeholder="Use supplier">
+        <p class="help">Replaces the supplier's <span data-tex="L">L</span> for this item.</p></div>
+      <div class="flex items-center sm:col-span-3"><label class="flex items-center gap-2 text-base2 font-medium text-gray-700" for="act"><input class="check" type="checkbox" name="is_active" value="1" id="act" {% if item.is_active or not item.id %}checked{% endif %}> Active</label></div>
+    </div>
+  </div>
+  <div class="card-footer justify-end"><a class="btn btn-ghost" href="{{ url_for('inventory.item_detail', item_id=item.id) if item.id else url_for('inventory.item_list') }}">Cancel</a><button class="btn btn-primary">{{ 'Save changes' if item.id else 'Create item' }}</button></div>
+</form>
+{% endblock %}
