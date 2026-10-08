@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, txn_badge, page_header, csrf, calc_row, empty_row, breadcrumb with context %}
+{% block title %}{{ item.sku }}{% endblock %}
+{% block content %}
+{{ breadcrumb([('Inventory', url_for('inventory.item_list')), (item.sku, None)]) }}
+{% call page_header(item.name, item.sku ~ (' · ' ~ item.barcode if item.barcode else '') ~ (' · Bin ' ~ item.location.code if item.location else '')) %}
+  {{ status_badge(status) }}
+  <a class="btn btn-secondary btn-sm" target="_blank" href="{{ url_for('inventory.labels', id=item.id) }}">Print label</a>
+  <form method="post" action="{{ url_for('inventory.item_recalculate', item_id=item.id) }}">{{ csrf() }}<button class="btn btn-secondary btn-sm">Recalculate</button></form>
+  {% if current_user.has_role('manager') %}<a class="btn btn-primary btn-sm" href="{{ url_for('inventory.item_edit', item_id=item.id) }}">Edit item</a>{% endif %}
+{% endcall %}
+
+{% set d = r.avg_daily_sales %}
+{% set L = r.lead_time %}
+{% set rop_raw = d * L + r.ss_value %}
+{% set Qraw = r.cover_demand + r.ss_value - r.on_hand - r.on_order %}
+
+<div class="metric-grid mb-5 !grid-cols-2 sm:!grid-cols-4 2xl:!grid-cols-8">
+  <div class="metric"><div class="k">On hand</div><div class="v">{{ r.on_hand }} <span class="text-xs2 font-normal text-gray-500">{{ item.unit }}</span></div></div>
+  <div class="metric"><div class="k">On order</div><div class="v">{{ r.on_order }}</div></div>
+  <div class="metric"><div class="k">Days of cover</div><div class="v">{{ r.days_cover|num(1) if r.days_cover is not none else '—' }}</div></div>
+  <div class="metric"><div class="k">Forecast, {{ cfg.forecast_horizon }} days</div><div class="v">{{ r.forecast_total|num(0) }}</div></div>
+  <div class="metric"><div class="k">Safety stock</div><div class="v">{{ r.safety_stock }}</div></div>
+  <div class="metric"><div class="k">Reorder point</div><div class="v">{{ r.reorder_point }}</div></div>
+  <div class="metric"><div class="k">Recommended order</div><div class="v text-accent-700">{{ r.recommended_qty }}</div></div>
+  <div class="metric"><div class="k">EOQ (reference)</div><div class="v">{{ r.eoq }}</div></div>
+</div>
+
+<div class="grid grid-cols-1 gap-5 xl:grid-cols-3">
+  <div class="min-w-0 space-y-5 xl:col-span-2">
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Demand history and forecast</h2>
+        <span class="card-sub">Model: {{ 'Linear regression' if r.model == 'LR' else 'Moving average (' ~ cfg.sma_window ~ '-day)' }}</span></div>
+      <div class="card-body"><div class="chart-box" style="height:300px"><canvas id="fc"></canvas></div></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Replenishment calculation</h2>
+        <span class="card-sub">{{ r.history_points }} days of sales history · recalculated {{ item.metrics_updated_at|dt }}</span></div>
+
+      <div class="grid grid-cols-1 gap-px border-b border-gray-200 bg-gray-100 text-base2 sm:grid-cols-2">
+        {% set inputs = [
+          ('\\bar d', 'Average daily demand', d|num(2), 'units/day'),
+          ('\\sigma_d', 'Demand std. deviation', r.demand_std|num(2), 'units/day'),
+          ('L', 'Lead time', L|num(2), 'days'),
+          ('\\sigma_L', 'Lead-time std. deviation', r.lead_time_std|num(2), 'days'),
+          ('SL', 'Service level', (r.service_level * 100)|num(1), '%'),
+          ('R', 'Review period', cfg.review_period|num(1), 'days'),
+        ] %}
+        {% for sym, label, val, unit in inputs %}
+        <div class="flex items-baseline justify-between gap-2 bg-white px-4 py-2">
+          <span class="text-gray-600"><span class="mr-1.5 inline-block w-6 text-gray-900" data-tex="{{ sym }}">{{ sym }}</span>{{ label }}</span>
+          <span class="whitespace-nowrap tabular-nums text-gray-900">{{ val }} <span class="text-xs2 text-gray-500">{{ unit }}</span></span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="table-wrap">
+        <table class="calc">
+          <thead><tr><th>Quantity</th><th>Formula and working</th><th class="text-right">Result</th></tr></thead>
+          <tbody>
+            {{ calc_row('Service factor',
+                 'Z = \\Phi^{-1}(SL)',
+                 '= \\Phi^{-1}(' ~ (r.service_level|tex(3)) ~ ')',
+                 r.z|num(2), 'Inverse standard normal') }}
+
+            {% if r.ss_method == 'statistical' %}
+              {% set ss_work = '= ' ~ (r.z|tex(2)) ~ '\\sqrt{' ~ (L|tex(2)) ~ ' \\times ' ~ (r.demand_std|tex(2)) ~ '^{2} + ' ~ (d|tex(2)) ~ '^{2} \\times ' ~ (r.lead_time_std|tex(2)) ~ '^{2}} = ' ~ (r.ss_calc|tex(2)) %}
+              {% if r.min_floor_applied %}{% set ss_work = ss_work ~ ';\\ \\max(' ~ (r.ss_calc|tex(2)) ~ ',\\,' ~ item.min_stock ~ ') = ' ~ (r.ss_value|tex(2)) %}{% endif %}
+              {{ calc_row('Safety stock',
+                   'SS = Z\\sqrt{L\\,\\sigma_d^{2} + \\bar d^{\\,2}\\,\\sigma_L^{2}}',
+                   ss_work, r.safety_stock,
+                   'Demand and lead-time variability, rounded up' ~ ('; minimum floor applied' if r.min_floor_applied else '')) }}
+            {% else %}
+              {% set ss_work = '= 0.5 \\times ' ~ (d|tex(2)) ~ ' \\times ' ~ (L|tex(2)) ~ ' = ' ~ (r.ss_calc|tex(2)) %}
+              {% if r.min_floor_applied %}{% set ss_work = ss_work ~ ';\\ \\max(' ~ (r.ss_calc|tex(2)) ~ ',\\,' ~ item.min_stock ~ ') = ' ~ (r.ss_value|tex(2)) %}{% endif %}
+              {{ calc_row('Safety stock', 'SS = \\tfrac{1}{2}\\,\\bar d\\,L', ss_work, r.safety_stock,
+                   'Simplified rule: fewer than 14 days of history') }}
+            {% endif %}
+
+            {{ calc_row('Reorder point',
+                 '\\mathrm{ROP} = \\bar d \\cdot L + SS',
+                 '= ' ~ (d|tex(2)) ~ ' \\times ' ~ (L|tex(2)) ~ ' + ' ~ (r.ss_value|tex(2)) ~ ' = ' ~ (rop_raw|tex(2)),
+                 r.reorder_point, 'Reorder when on hand falls to this level') }}
+
+            {{ calc_row('Order quantity',
+                 'Q = \\max\\!\\big(0,\\ \\lceil \\hat D_{L+R} + SS - I_{\\mathrm{hand}} - I_{\\mathrm{order}} \\rceil\\big)',
+                 '= \\max\\!\\big(0,\\ \\lceil ' ~ (r.cover_demand|tex(2)) ~ ' + ' ~ (r.ss_value|tex(2)) ~ ' - ' ~ r.on_hand ~ ' - ' ~ r.on_order ~ ' \\rceil\\big) = \\max(0,\\ \\lceil ' ~ (Qraw|tex(2)) ~ ' \\rceil)',
+                 r.recommended_qty, 'Order-up-to over L + R = ' ~ (r.cover_days|num(1)) ~ ' days') }}
+
+            {% if current_user.can_view_financials %}
+              {% if r.holding_cost > 0 and r.annual_demand > 0 %}
+                {{ calc_row('Economic order qty',
+                     '\\mathrm{EOQ} = \\sqrt{2DS / H}',
+                     '= \\sqrt{2 \\times ' ~ (r.annual_demand|tex(0)) ~ ' \\times ' ~ (r.ordering_cost|tex(2)) ~ ' / ' ~ (r.holding_cost|tex(2)) ~ '}',
+                     r.eoq, 'D annual demand, S cost per order, H holding cost per unit-year') }}
+              {% else %}
+                {{ calc_row('Economic order qty', '\\mathrm{EOQ} = \\sqrt{2DS / H}', None, '—', 'Not defined: no demand or no holding cost') }}
+              {% endif %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-xs2 text-gray-600">
+        Trend {{ r.trend_slope|num(3) }} units/day per day (R² {{ r.r2|num(2) }}).
+        {% if r.backtest.sma %}Back-test on the last {{ r.backtest.holdout }} days, MAE: moving average {{ r.backtest.sma.mae|num(2) }}, regression {{ r.backtest.lr.mae|num(2) }}.{% else %}Not enough history to back-test; moving average used.{% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Recent movements</h2><a class="text-xs2" href="{{ url_for('main.transactions', item_id=item.id) }}">Full ledger</a></div>
+      <div class="table-wrap"><table class="table table-sm">
+        <thead><tr><th>Date</th><th>Type</th><th class="num">Qty</th><th class="num">Balance</th><th>Batch</th><th>Reference</th><th>User</th></tr></thead>
+        <tbody>{% for t in txns %}<tr><td class="whitespace-nowrap text-gray-600">{{ t.created_at|dt }}</td><td>{{ txn_badge(t.txn_type) }}</td><td class="num font-medium text-gray-900">{{ t.quantity }}</td><td class="num">{{ t.balance_after }}</td>
+          <td class="mono">{{ t.batch.batch_no if t.batch else '' }}</td><td class="min-w-[12rem]">{{ t.reference or '' }}{% if t.client %} <span class="text-gray-500">· {{ t.client.name }}</span>{% endif %}</td><td class="text-gray-600">{{ t.user.username if t.user else 'system' }}</td></tr>
+        {% else %}{{ empty_row(7, 'No movements yet.') }}{% endfor %}</tbody></table></div>
+    </section>
+  </div>
+
+  <div class="space-y-5">
+    <section class="card"><div class="card-header"><h2 class="card-title">Item details</h2></div>
+      <table class="table"><tbody>
+        {% set rows = [('Category', item.category.name if item.category else '—'), ('Supplier', item.supplier.name if item.supplier else '—'), ('Unit', item.unit)] %}
+        {% if current_user.can_view_financials %}
+          {% set rows = rows + [('Unit cost', currency ~ ' ' ~ (item.unit_cost|money)), ('Unit price', currency ~ ' ' ~ (item.unit_price|money)), ('Stock value', currency ~ ' ' ~ (item.stock_value|money))] %}
+        {% endif %}
+        {% for k, v in rows %}<tr><td class="text-gray-500">{{ k }}</td><td class="text-right text-gray-900">{{ v }}</td></tr>{% endfor %}
+      </tbody></table></section>
+    <section class="card"><div class="card-header"><h2 class="card-title">Batches on hand</h2><span class="card-sub">First-expiry-first-out</span></div>
+      <table class="table"><thead><tr><th>Batch</th><th class="num">Qty</th><th class="text-right">Expiry</th></tr></thead><tbody>
+        {% for b in item.batches if b.quantity > 0 %}
+        <tr><td class="mono">{{ b.batch_no }}</td><td class="num">{{ b.quantity }}</td>
+          <td class="whitespace-nowrap text-right {{ 'font-medium text-red-700' if b.expiry_date and b.days_to_expiry < 0 else ('text-amber-700' if b.expiry_date and b.days_to_expiry <= 30 else 'text-gray-600') }}">{{ b.expiry_date or '—' }}</td></tr>
+        {% else %}{{ empty_row(3, 'No stock on hand.') }}{% endfor %}
+      </tbody></table></section>
+    {% if current_user.has_role('manager') and item.batches %}
+    <section class="card"><div class="card-header"><h2 class="card-title">Stock count adjustment</h2></div>
+      <form method="post" action="{{ url_for('inventory.item_adjust', item_id=item.id) }}">{{ csrf() }}
+        <div class="card-body space-y-3">
+          <div><label class="label" for="adjBatch">Batch</label><select class="input" id="adjBatch" name="batch_id">
+            {% for b in item.batches %}<option value="{{ b.id }}">{{ b.batch_no }} (system: {{ b.quantity }})</option>{% endfor %}</select></div>
+          <div><label class="label" for="adjQty">Counted quantity</label><input class="input" id="adjQty" type="number" min="0" name="counted_qty" required></div>
+          <div><label class="label" for="adjReason">Reason</label><input class="input" id="adjReason" name="reason" placeholder="e.g. damaged, cycle count"></div>
+        </div>
+        <div class="card-footer justify-end"><button class="btn btn-secondary">Post adjustment</button></div>
+      </form></section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+const c = {{ chart|tojson }};
+new Chart(document.getElementById('fc'), {
+  data: { labels: c.labels, datasets: [
+    { type: 'bar', label: 'Actual daily sales', data: c.actual, backgroundColor: ISTOCK_COLORS.accentBar, order: 3 },
+    { type: 'line', label: '{{ cfg.sma_window }}-day moving average', data: c.sma, borderColor: ISTOCK_COLORS.dark, pointRadius: 0, borderWidth: 1.5, order: 2 },
+    { type: 'line', label: 'Regression trend', data: c.lr, borderColor: ISTOCK_COLORS.gray, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.25, order: 1 },
+    { type: 'line', label: 'Forecast', data: c.forecast, borderColor: ISTOCK_COLORS.green, backgroundColor: ISTOCK_COLORS.greenSoft, fill: true, pointRadius: 0, borderWidth: 2, order: 0 },
+  ]},
+  options: { interaction: { mode: 'index', intersect: false },
+    scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, maxRotation: 0 } }, y: { beginAtZero: true } }, plugins: { legend: { position: 'top' } } }
+});
+</script>
+{% endblock %}
