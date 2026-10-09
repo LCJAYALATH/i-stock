@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, csrf with context %}
+{% block title %}Categories & Bins{% endblock %}
+{% block content %}
+{% call page_header("Categories & warehouse bins", "Master data used to classify items and plan picking routes") %}
+  <a class="btn btn-secondary" target="_blank" href="{{ url_for('inventory.count_sheet') }}">Count sheet (blind)</a>
+  <a class="btn btn-secondary" target="_blank" href="{{ url_for('inventory.count_sheet', system=1) }}">Count sheet with system qty</a>
+{% endcall %}
+<div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+  <section class="card">
+    <div class="card-header"><h2 class="card-title">Categories</h2><span class="card-sub">{{ categories|length }}</span></div>
+    <div class="text-base2">{% for c in categories %}<div class="list-row justify-start"><span class="w-36 shrink-0 font-medium text-gray-900">{{ c.name }}</span><span class="truncate text-gray-500">{{ c.description or '' }}</span></div>{% endfor %}</div>
+    <form method="post" class="card-footer !flex-nowrap">{{ csrf() }}<input type="hidden" name="kind" value="category"><span class="hidden shrink-0 text-xs2 font-medium text-gray-600 sm:inline">New</span>
+      <input class="input" name="name" placeholder="Name" required aria-label="Category name">
+      <input class="input" name="description" placeholder="Description" aria-label="Description">
+      <button class="btn btn-secondary">Add</button></form>
+  </section>
+  <section class="card">
+    <div class="card-header"><h2 class="card-title">Warehouse bins</h2><span class="card-sub">{{ locations|length }}</span></div>
+    <div class="text-base2">{% for l in locations %}<div class="list-row justify-start"><span class="mono w-20 shrink-0 font-semibold text-gray-900">{{ l.code }}</span><span class="w-24 shrink-0">{% if l.zone %}<span class="badge badge-light">{{ l.zone }}</span>{% endif %}</span><span class="truncate text-gray-500">{{ l.description or '' }}</span></div>{% endfor %}</div>
+    <form method="post" class="card-footer !flex-nowrap">{{ csrf() }}<input type="hidden" name="kind" value="location"><span class="hidden shrink-0 text-xs2 font-medium text-gray-600 sm:inline">New</span>
+      <input class="input font-mono" name="code" placeholder="A-01-01" required aria-label="Bin code">
+      <input class="input" name="zone" placeholder="Zone" aria-label="Zone">
+      <input class="input" name="description" placeholder="Description" aria-label="Description">
+      <button class="btn btn-secondary">Add</button></form>
+  </section>
+</div>
+{% endblock %}
