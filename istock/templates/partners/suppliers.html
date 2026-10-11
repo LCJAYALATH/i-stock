@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, empty_row with context %}
+{% block title %}Suppliers{% endblock %}
+{% block content %}
+{% call page_header("Suppliers", "Lead times are learned automatically once 3 or more purchase orders have been received") %}
+  {% if current_user.has_role('manager') %}<a class="btn btn-primary" href="{{ url_for('partners.supplier_form') }}">New supplier</a>{% endif %}
+{% endcall %}
+<div class="card"><div class="table-wrap"><table class="table table-hover">
+  <thead><tr><th>Supplier</th><th>Contact</th><th class="num">Lead time <span data-tex="L" class="normal-case">L</span> (d)</th><th class="num">Variability <span data-tex="\sigma_L" class="normal-case">σL</span> (±d)</th><th class="num">Items</th><th class="num">POs received</th><th></th></tr></thead>
+  <tbody>{% for s in suppliers %}<tr class="{{ '' if s.is_active else 'opacity-60' }}">
+    <td>{% if current_user.has_role('manager') %}<a class="font-medium" href="{{ url_for('partners.supplier_form', supplier_id=s.id) }}">{{ s.name }}</a>{% else %}<span class="font-medium text-gray-900">{{ s.name }}</span>{% endif %}{% if not s.is_active %} <span class="badge badge-dark ml-1">Inactive</span>{% endif %}<div class="text-xs2 text-gray-500">{{ s.address or '' }}</div></td>
+    <td>{{ s.contact_person or '—' }}<div class="flex flex-wrap gap-x-3 text-xs2 text-gray-500">{% if s.phone %}<span>{{ s.phone }}</span>{% endif %}{% if s.email %}<a class="text-gray-500" href="mailto:{{ s.email }}">{{ s.email }}</a>{% endif %}</div></td>
+    <td class="num font-medium text-gray-900">{{ s.lead_time_days|num(1) }}</td><td class="num">{{ s.lead_time_std|num(1) }}</td>
+    <td class="num"><a href="{{ url_for('inventory.item_list', supplier=s.id) }}">{{ counts.get(s.id, 0) }}</a></td>
+    <td class="num">{{ received.get(s.id, 0) }}</td>
+    <td class="text-right">{% if current_user.has_role('manager') %}<a class="btn btn-ghost btn-sm" href="{{ url_for('partners.supplier_form', supplier_id=s.id) }}">Edit</a>{% endif %}</td>
+  </tr>{% else %}{{ empty_row(7, 'No suppliers yet.') }}{% endfor %}</tbody></table></div></div>
+{% endblock %}
