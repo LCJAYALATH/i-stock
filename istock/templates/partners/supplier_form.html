@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, breadcrumb, csrf with context %}
+{% block title %}{{ supplier.name if supplier.id else 'New supplier' }}{% endblock %}
+{% block content %}
+{{ breadcrumb([('Suppliers', url_for('partners.suppliers')), (supplier.name if supplier.id else 'New supplier', None)]) }}
+{% call page_header(supplier.name if supplier.id else 'New supplier', 'Edit supplier details and lead time' if supplier.id else 'Add a supplier you buy stock from') %}{% endcall %}
+<form method="post" class="card max-w-5xl">{{ csrf() }}
+  <div class="form-section">
+    <div class="form-section-head"><h2>Company</h2><p>Printed on purchase orders.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-6"><label class="label" for="name">Name <span class="req">*</span></label><input class="input" id="name" name="name" value="{{ supplier.name or '' }}" required></div>
+      <div class="sm:col-span-6"><label class="label" for="address">Address</label><input class="input" id="address" name="address" value="{{ supplier.address or '' }}"></div>
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="form-section-head"><h2>Contact</h2><p>Who to send orders and queries to.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-6"><label class="label" for="contact_person">Contact person</label><input class="input" id="contact_person" name="contact_person" value="{{ supplier.contact_person or '' }}"></div>
+      <div class="sm:col-span-3"><label class="label" for="phone">Phone</label><input class="input" id="phone" type="tel" name="phone" value="{{ supplier.phone or '' }}"></div>
+      <div class="sm:col-span-3"><label class="label" for="email">Email</label><input class="input" id="email" type="email" name="email" value="{{ supplier.email or '' }}"></div>
+    </div>
+  </div>
+  <div class="form-section border-b-0">
+    <div class="form-section-head"><h2>Lead time</h2><p>Days from sending a PO to receiving the goods. Learned automatically from received POs.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-3"><label class="label" for="lead_time_days">Average lead time, days <span class="req">*</span></label><input class="input" id="lead_time_days" type="number" step="0.1" min="0.1" name="lead_time_days" value="{{ supplier.lead_time_days }}" required></div>
+      {% if supplier.id %}<div class="sm:col-span-3"><span class="label">Variability</span><div class="flex h-8 items-center text-base2 text-gray-700"><span data-tex="\sigma_L">σL</span>&nbsp;= {{ supplier.lead_time_std|num(1) }} days</div></div>{% endif %}
+      <p class="help sm:col-span-6 !mt-0">Changing the lead time recalculates the reorder point of every item from this supplier: <span data-tex="\mathrm{ROP} = \bar d \cdot L + SS">ROP = d × L + SS</span>.</p>
+      {% if supplier.id %}<div class="sm:col-span-6"><label class="flex items-center gap-2 text-base2 font-medium text-gray-700" for="a"><input class="check" type="checkbox" name="is_active" id="a" value="1" {% if supplier.is_active %}checked{% endif %}> Active supplier</label></div>{% endif %}
+    </div>
+  </div>
+  <div class="card-footer justify-end"><a class="btn btn-ghost" href="{{ url_for('partners.suppliers') }}">Cancel</a><button class="btn btn-primary">{{ 'Save changes' if supplier.id else 'Create supplier' }}</button></div>
+</form>
+{% endblock %}
