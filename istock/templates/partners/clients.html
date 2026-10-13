@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, empty_row with context %}
+{% block title %}Clients{% endblock %}
+{% block content %}
+{% call page_header("Clients", "Retailers and customers you ship to") %}
+  <a class="btn btn-primary" href="{{ url_for('partners.client_form') }}">New client</a>
+{% endcall %}
+<div class="card"><div class="table-wrap"><table class="table table-hover">
+  <thead><tr><th>Client</th><th>Contact</th><th>Address</th><th class="num">Orders</th><th></th></tr></thead>
+  <tbody>{% for c in clients %}<tr><td><a class="font-medium" href="{{ url_for('partners.client_form', client_id=c.id) }}">{{ c.name }}</a></td><td>{{ c.contact_person or '—' }}<div class="text-xs2 text-gray-500">{{ c.phone or '' }}</div></td>
+    <td class="text-gray-500">{{ c.address or '' }}</td><td class="num">{{ orders.get(c.id, 0) }}</td>
+    <td class="text-right"><a class="btn btn-ghost btn-sm" href="{{ url_for('partners.client_form', client_id=c.id) }}">Edit</a></td></tr>
+  {% else %}{{ empty_row(5, 'No clients yet.') }}{% endfor %}</tbody></table></div></div>
+{% endblock %}
