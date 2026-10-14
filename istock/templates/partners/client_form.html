@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, breadcrumb, csrf with context %}
+{% block title %}{{ client.name if client.id else 'New client' }}{% endblock %}
+{% block content %}
+{{ breadcrumb([('Clients', url_for('partners.clients')), (client.name if client.id else 'New client', None)]) }}
+{% call page_header(client.name if client.id else 'New client', 'Edit client details' if client.id else 'Add a retailer or customer you ship to') %}{% endcall %}
+<form method="post" class="card max-w-5xl">{{ csrf() }}
+  <div class="form-section">
+    <div class="form-section-head"><h2>Client</h2><p>Printed on invoices and picking lists.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-6"><label class="label" for="name">Name <span class="req">*</span></label><input class="input" id="name" name="name" value="{{ client.name or '' }}" required></div>
+      <div class="sm:col-span-6"><label class="label" for="address">Delivery address</label><input class="input" id="address" name="address" value="{{ client.address or '' }}"></div>
+    </div>
+  </div>
+  <div class="form-section border-b-0">
+    <div class="form-section-head"><h2>Contact</h2><p>Who receives deliveries.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-3"><label class="label" for="contact_person">Contact person</label><input class="input" id="contact_person" name="contact_person" value="{{ client.contact_person or '' }}"></div>
+      <div class="sm:col-span-3"><label class="label" for="phone">Phone</label><input class="input" id="phone" type="tel" name="phone" value="{{ client.phone or '' }}"></div>
+    </div>
+  </div>
+  <div class="card-footer justify-end"><a class="btn btn-ghost" href="{{ url_for('partners.clients') }}">Cancel</a><button class="btn btn-primary">{{ 'Save changes' if client.id else 'Create client' }}</button></div>
+</form>
+{% endblock %}
