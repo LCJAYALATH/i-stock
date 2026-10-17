@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, breadcrumb, csrf with context %}
+{% block title %}New purchase order{% endblock %}
+{% block content %}
+{{ breadcrumb([('Purchase orders', url_for('orders.po_list')), ('New', None)]) }}
+{% call page_header("New purchase order", "Create a draft, then add lines and send it for approval") %}{% endcall %}
+<form method="post" class="card max-w-5xl">{{ csrf() }}
+  <div class="form-section border-b-0">
+    <div class="form-section-head"><h2>Order</h2><p>Lines are added on the next screen. Only the supplier's items are offered.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-6"><label class="label" for="supplier_id">Supplier <span class="req">*</span></label><select class="input" id="supplier_id" name="supplier_id" required><option value="">Choose a supplier…</option>
+        {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }} · {{ s.lead_time_days|num(1) }} d lead time</option>{% endfor %}</select></div>
+      <div class="sm:col-span-6"><label class="label" for="notes">Notes</label><textarea class="input h-auto min-h-[72px] py-1.5" id="notes" name="notes" rows="3" placeholder="Printed on the PO, e.g. delivery instructions"></textarea></div>
+    </div>
+  </div>
+  <div class="card-footer justify-end"><a class="btn btn-ghost" href="{{ url_for('orders.po_list') }}">Cancel</a><button class="btn btn-primary">Create draft</button></div>
+</form>
+<div class="mt-5 flex max-w-5xl items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-base2 text-gray-600">
+  <i class="bi bi-info-circle mt-px text-gray-400"></i>
+  <p>Draft POs are also created automatically when an item reaches its reorder point. Use <a href="{{ url_for('orders.po_list') }}">Generate reorder POs</a> on the purchase orders page to draft them all at once.</p>
+</div>
+{% endblock %}
