@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, po_badge, csrf, empty_row, breadcrumb, progress with context %}
+{% block title %}{{ po.po_number }}{% endblock %}
+{% block content %}
+{% set fin = current_user.can_view_financials %}
+{% set mgr = current_user.has_role('manager') %}
+{% set s = po.supplier %}
+{{ breadcrumb([('Purchase orders', url_for('orders.po_list')), (po.po_number, None)]) }}
+{% call page_header(po.po_number, s.name ~ (' · drafted automatically by the replenishment engine' if po.auto_generated else ''), po_badge(po.status)) %}
+  <a class="btn btn-secondary" target="_blank" href="{{ url_for('orders.po_pdf', po_id=po.id) }}"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+  {% if mgr and po.status in ('DRAFT','SENT') %}
+  <form method="post" action="{{ url_for('orders.po_cancel', po_id=po.id) }}" onsubmit="return confirm('Cancel this purchase order?')">{{ csrf() }}<button class="btn btn-danger">Cancel PO</button></form>
+  {% endif %}
+  {% if mgr and po.status == 'DRAFT' %}
+  <form method="post" action="{{ url_for('orders.po_send', po_id=po.id) }}">{{ csrf() }}<button class="btn btn-primary" {% if not po.lines %}disabled title="Add at least one line"{% endif %}>Approve &amp; send</button></form>
+  {% endif %}
+{% endcall %}
+
+<div class="mb-5">
+{% set steps = [('DRAFT', 'Draft', po.created_at|dt), ('SENT', 'Approved & sent', po.sent_at|dt if po.sent_at else None)] %}
+{% if po.status == 'PARTIAL' %}{% set steps = steps + [('PARTIAL', 'Partially received', 'Awaiting balance')] %}{% endif %}
+{% set steps = steps + [('RECEIVED', 'Received', po.received_at|dt if po.received_at else (('Expected ' ~ po.expected_date) if po.expected_date else None))] %}
+{{ progress(steps, po.status, po.status == 'CANCELLED') }}
+</div>
+
+<div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+<div class="min-w-0 space-y-5 lg:col-span-2">
+
+{% if po.status == 'DRAFT' and mgr %}
+<form method="post" action="{{ url_for('orders.po_lines', po_id=po.id) }}" class="card">{{ csrf() }}<input type="hidden" name="action" value="update">
+  <div class="card-header"><h2 class="card-title">Lines</h2><span class="card-sub">Set a quantity to 0 to remove a line</span></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">ROP</th><th class="num">Suggested</th><th class="w-24">Qty</th><th class="w-28">Unit cost</th><th class="num">Amount</th></tr></thead>
+    <tbody>{% for l in po.lines %}<tr>
+      <td><a href="{{ url_for('inventory.item_detail', item_id=l.item_id) }}">{{ l.item.name }}</a><div class="mono text-xs2 text-gray-500">{{ l.item.sku }}</div></td>
+      <td class="num">{{ l.item.quantity_on_hand }}</td><td class="num">{{ l.item.reorder_point }}</td><td class="num font-medium text-accent-700">{{ l.item.recommended_qty }}</td>
+      <td><input class="input input-sm min-w-[5.5rem] text-right tabular-nums" type="number" min="0" name="qty_{{ l.id }}" value="{{ l.quantity_ordered }}" aria-label="Quantity for {{ l.item.name }}"></td>
+      <td><input class="input input-sm min-w-[5.5rem] text-right tabular-nums" type="number" step="0.01" min="0" name="cost_{{ l.id }}" value="{{ l.unit_cost }}" aria-label="Unit cost for {{ l.item.name }}"></td>
+      <td class="num font-medium text-gray-900">{{ (l.unit_cost * l.quantity_ordered)|money }}</td></tr>
+    {% else %}{{ empty_row(7, 'No lines yet. Add an item below.') }}{% endfor %}</tbody>
+    {% if po.lines %}<tfoot><tr><th colspan="6" class="text-right">Total ({{ currency }})</th><th class="num">{{ po.total|money }}</th></tr></tfoot>{% endif %}</table></div>
+  {% if po.lines %}<div class="card-footer justify-end"><button class="btn btn-secondary">Save changes</button></div>{% endif %}
+</form>
+<form method="post" action="{{ url_for('orders.po_lines', po_id=po.id) }}" class="card">{{ csrf() }}<input type="hidden" name="action" value="add">
+  <div class="card-header"><h2 class="card-title">Add line</h2><span class="card-sub">Items supplied by {{ s.name }}</span></div>
+  <div class="card-body grid grid-cols-2 items-end gap-3 md:grid-cols-12">
+    <div class="col-span-2 md:col-span-6"><label class="label" for="addItem">Item</label><select class="input" id="addItem" name="item_id" required>
+      {% for i in supplier_items %}<option value="{{ i.id }}">{{ i.name }} · {{ i.sku }} (on hand {{ i.quantity_on_hand }}, suggested {{ i.recommended_qty }})</option>{% endfor %}</select></div>
+    <div class="md:col-span-2"><label class="label" for="addQty">Qty</label><input class="input text-right" id="addQty" type="number" min="1" name="qty" required></div>
+    <div class="md:col-span-2"><label class="label" for="addCost">Unit cost</label><input class="input text-right" id="addCost" type="number" step="0.01" min="0" name="unit_cost" placeholder="Default"></div>
+    <div class="col-span-2 md:col-span-2"><button class="btn btn-secondary w-full">Add line</button></div>
+  </div>
+</form>
+
+{% elif po.status in ('SENT','PARTIAL') %}
+<form method="post" action="{{ url_for('orders.po_receive', po_id=po.id) }}" class="card">{{ csrf() }}
+  <div class="card-header"><h2 class="card-title">Receive goods (GRN)</h2><span class="card-sub">Enter what arrived. Batch numbers are generated if left blank.</span></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Outstanding</th><th class="w-24">Receive now</th><th class="w-36">Batch no.</th><th class="w-40">Expiry</th></tr></thead>
+    <tbody>{% for l in po.lines %}<tr>
+      <td class="min-w-[10rem]"><a href="{{ url_for('inventory.item_detail', item_id=l.item_id) }}">{{ l.item.name }}</a><div class="mono text-xs2 text-gray-500">{{ l.item.sku }}</div></td>
+      <td class="num">{{ l.quantity_ordered }}</td><td class="num">{{ l.quantity_received }}</td><td class="num font-semibold text-gray-900">{{ l.outstanding }}</td>
+      <td><input class="input input-sm min-w-[5.5rem] text-right tabular-nums" type="number" min="0" max="{{ l.outstanding }}" name="qty_{{ l.id }}" value="{{ l.outstanding }}" aria-label="Receive now" {% if not l.outstanding %}disabled{% endif %}></td>
+      <td><input class="input input-sm min-w-[7rem] font-mono" name="batch_{{ l.id }}" placeholder="Auto" aria-label="Batch number"></td>
+      <td><input class="input input-sm min-w-[9rem]" type="date" name="expiry_{{ l.id }}" aria-label="Expiry"></td></tr>{% endfor %}</tbody></table></div>
+  <div class="card-footer justify-end"><button class="btn btn-success">Post receipt</button></div>
+</form>
+
+{% else %}
+<section class="card">
+  <div class="card-header"><h2 class="card-title">Lines</h2><span class="card-sub">{{ po.lines|length }} item{{ '' if po.lines|length == 1 else 's' }}</span></div>
+  <div class="table-wrap"><table class="table">
+  <thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Received</th>{% if fin %}<th class="num">Unit cost</th><th class="num">Amount</th>{% endif %}</tr></thead>
+  <tbody>{% for l in po.lines %}<tr><td><a href="{{ url_for('inventory.item_detail', item_id=l.item_id) }}">{{ l.item.name }}</a><div class="mono text-xs2 text-gray-500">{{ l.item.sku }}</div></td><td class="num">{{ l.quantity_ordered }}</td>
+    <td class="num {{ 'text-amber-700' if l.quantity_received < l.quantity_ordered and po.status == 'RECEIVED' }}">{{ l.quantity_received }}</td>
+    {% if fin %}<td class="num">{{ l.unit_cost|money }}</td><td class="num font-medium text-gray-900">{{ (l.unit_cost * l.quantity_ordered)|money }}</td>{% endif %}</tr>
+  {% else %}{{ empty_row(5 if fin else 3, 'No lines.') }}{% endfor %}</tbody>
+  {% if fin and po.lines %}<tfoot><tr><th colspan="4" class="text-right">Total ({{ currency }})</th><th class="num">{{ po.total|money }}</th></tr></tfoot>{% endif %}</table></div>
+</section>
+{% endif %}
+</div>
+
+<aside class="space-y-5">
+  {% if fin %}
+  <section class="card">
+    <div class="flex items-baseline justify-between px-4 py-3"><span class="text-base2 text-gray-500">Order total</span><span class="text-lg font-semibold tabular-nums text-gray-900"><span class="mr-1 text-base2 font-normal text-gray-500">{{ currency }}</span>{{ po.total|money }}</span></div>
+  </section>
+  {% endif %}
+  <section class="card">
+    <div class="card-header"><h2 class="card-title">Supplier</h2>{% if current_user.has_role('manager') %}<a class="text-xs2" href="{{ url_for('partners.supplier_form', supplier_id=s.id) }}">Edit</a>{% endif %}</div>
+    <dl class="kv card-body">
+      <dt>Name</dt><dd class="font-medium">{{ s.name }}</dd>
+      <dt>Contact</dt><dd>{{ s.contact_person or '—' }}</dd>
+      <dt>Phone</dt><dd>{% if s.phone %}<a href="tel:{{ s.phone }}">{{ s.phone }}</a>{% else %}—{% endif %}</dd>
+      <dt>Email</dt><dd class="truncate">{% if s.email %}<a href="mailto:{{ s.email }}">{{ s.email }}</a>{% else %}—{% endif %}</dd>
+      <dt>Lead time</dt><dd class="tabular-nums">{{ s.lead_time_days|num(1) }} days <span class="text-gray-500">± {{ s.lead_time_std|num(1) }}</span></dd>
+    </dl>
+  </section>
+  <section class="card">
+    <div class="card-header"><h2 class="card-title">Activity</h2></div>
+    <dl class="kv card-body">
+      <dt>Created</dt><dd>{{ po.created_at|dt }}<div class="text-xs2 text-gray-500">{{ po.created_by.full_name if po.created_by else 'Replenishment engine' }}</div></dd>
+      <dt>Approved</dt><dd>{% if po.sent_at %}{{ po.sent_at|dt }}<div class="text-xs2 text-gray-500">{{ po.approved_by.full_name if po.approved_by else '' }}</div>{% else %}<span class="text-gray-400">Not yet</span>{% endif %}</dd>
+      <dt>Expected</dt><dd>{{ po.expected_date or '—' }}</dd>
+      <dt>Received</dt><dd>{% if po.received_at %}{{ po.received_at|dt }}{% else %}<span class="text-gray-400">Not yet</span>{% endif %}</dd>
+    </dl>
+  </section>
+  {% if po.notes %}
+  <section class="card"><div class="card-header"><h2 class="card-title">Notes</h2></div><p class="card-body whitespace-pre-line text-gray-700">{{ po.notes }}</p></section>
+  {% endif %}
+</aside>
+</div>
+{% endblock %}
