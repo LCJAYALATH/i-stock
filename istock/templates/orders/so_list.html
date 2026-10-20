@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, so_badge, empty_row, pager, status_tabs with context %}
+{% block title %}Client Orders{% endblock %}
+{% block content %}
+{% call page_header("Client orders", "Create → print picking list → dispatch") %}
+  <a class="btn btn-primary" href="{{ url_for('orders.so_new') }}">New order</a>
+{% endcall %}
+{{ status_tabs('orders.so_list', statuses, counts) }}
+<div class="card"><div class="table-wrap"><table class="table table-hover">
+  <thead><tr><th>Order</th><th>Client</th><th>Status</th><th class="num">Lines</th><th class="num">Total ({{ currency }})</th><th>Created</th><th>Dispatched</th></tr></thead>
+  <tbody>{% for o in orders %}<tr><td><a class="mono font-medium" href="{{ url_for('orders.so_detail', order_id=o.id) }}">{{ o.order_number }}</a></td><td class="font-medium text-gray-900">{{ o.client.name }}</td>
+    <td>{{ so_badge(o.status) }}</td><td class="num">{{ o.lines|length }}</td><td class="num font-medium text-gray-900">{{ o.total|money }}</td><td class="whitespace-nowrap text-gray-500">{{ o.created_at|dt }}</td><td class="whitespace-nowrap text-gray-500">{{ o.dispatched_at|dt }}</td></tr>
+  {% else %}{{ empty_row(7, 'No orders with this status.') }}{% endfor %}</tbody></table></div>
+  {{ pager(page, 'orders.so_list', 'orders') }}</div>
+{% endblock %}
