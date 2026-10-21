@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, breadcrumb, csrf with context %}
+{% block title %}New client order{% endblock %}
+{% block content %}
+{{ breadcrumb([('Client orders', url_for('orders.so_list')), ('New', None)]) }}
+{% call page_header("New client order", "Stock is allocated first-expiry-first-out when the picking list is printed") %}{% endcall %}
+<form method="post" id="soForm" class="grid grid-cols-1 gap-5 lg:grid-cols-3">{{ csrf() }}
+  <div class="space-y-5 lg:col-span-2">
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Client</h2></div>
+      <div class="card-body grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><label class="label" for="client_id">Client <span class="req">*</span></label>
+          <select class="input" id="client_id" name="client_id" required><option value="">Choose a client…</option>
+          {% for c in clients %}<option value="{{ c.id }}" data-address="{{ c.address or '' }}">{{ c.name }}</option>{% endfor %}</select>
+          <p class="help">Not listed? <a href="{{ url_for('partners.client_form') }}">Add a new client</a></p></div>
+        <div><label class="label" for="notes">Notes</label><input class="input" id="notes" name="notes" placeholder="Optional, printed on the picking list"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2 class="card-title">Items</h2><span class="card-sub" id="lineCount">0 lines</span></div>
+      <div class="border-b border-gray-200 p-4">
+        <label class="label" for="itemSearch">Add item</label>
+        <div class="relative">
+          <i class="bi bi-search pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-gray-400"></i>
+          <input class="input pl-8" id="itemSearch" placeholder="Search by SKU, name or barcode, then Enter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="results">
+          <div class="absolute z-20 mt-1 hidden max-h-72 w-full overflow-auto rounded-xl border border-gray-200 bg-white py-1 shadow-md" id="results" role="listbox"></div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Item</th><th class="num w-24">Available</th><th class="w-28">Qty</th><th class="w-32">Unit price</th><th class="num w-32">Amount</th><th class="w-10"></th></tr></thead>
+          <tbody id="lines"><tr class="empty"><td colspan="6" class="!py-10 text-center text-gray-500">No items yet. Search above to add the first line.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <aside class="lg:col-span-1">
+    <section class="card lg:sticky lg:top-20">
+      <div class="card-header"><h2 class="card-title">Summary</h2></div>
+      <dl class="kv card-body">
+        <dt>Client</dt><dd id="sumClient" class="truncate">—</dd>
+        <dt>Deliver to</dt><dd id="sumAddr" class="text-gray-600">—</dd>
+        <dt>Lines</dt><dd id="sumLines" class="tabular-nums">0</dd>
+        <dt>Units</dt><dd id="sumUnits" class="tabular-nums">0</dd>
+      </dl>
+      <div class="flex items-baseline justify-between border-t border-gray-200 px-4 py-3">
+        <span class="text-base2 font-medium text-gray-700">Total ({{ currency }})</span>
+        <span id="sumTotal" class="text-lg font-semibold tabular-nums text-gray-900">0.00</span>
+      </div>
+      <p id="shortWarn" class="mx-4 mb-3 hidden rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs2 text-amber-900">Some lines exceed available stock. They will be short on the picking list.</p>
+      <div class="card-footer">
+        <a class="btn btn-ghost" href="{{ url_for('orders.so_list') }}">Cancel</a>
+        <button class="btn btn-primary ml-auto" id="createBtn" disabled>Create order</button>
+      </div>
+    </section>
+  </aside>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const canPrice = {{ 'true' if current_user.can_view_financials else 'false' }};
+  const $ = (id) => document.getElementById(id);
+  const input = $('itemSearch'), results = $('results'), lines = $('lines');
+  const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const emptyRow = lines.querySelector('.empty');
+  let found = [], timer;
+
+  const clear = () => { results.replaceChildren(); results.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); };
+
+  function recalc() {
+    const rows = [...lines.querySelectorAll('tr[data-line]')];
+    let units = 0, total = 0, short = false;
+    rows.forEach((tr) => {
+      const q = parseInt(tr.querySelector('[name=qty]').value, 10) || 0;
+      const p = parseFloat(tr.querySelector('[name=unit_price]').value) || 0;
+      units += q; total += q * p;
+      tr.querySelector('.amt').textContent = fmt(q * p);
+      const over = q > parseInt(tr.dataset.avail, 10);
+      tr.querySelector('.avail').classList.toggle('text-red-700', over);
+      short = short || over;
+    });
+    if (!rows.length && !lines.contains(emptyRow)) lines.appendChild(emptyRow);
+    $('lineCount').textContent = rows.length + (rows.length === 1 ? ' line' : ' lines');
+    $('sumLines').textContent = rows.length; $('sumUnits').textContent = units; $('sumTotal').textContent = fmt(total);
+    $('shortWarn').classList.toggle('hidden', !short);
+    $('createBtn').disabled = !rows.length || !$('client_id').value;
+  }
+
+  $('client_id').addEventListener('change', (e) => {
+    const opt = e.target.selectedOptions[0];
+    $('sumClient').textContent = e.target.value ? opt.textContent : '—';
+    $('sumAddr').textContent = (e.target.value && opt.dataset.address) || '—';
+    recalc();
+  });
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = input.value.trim();
+      if (!q) { clear(); return; }
+      found = await (await fetch('/api/items/search?q=' + encodeURIComponent(q))).json();
+      if (!found.length) {
+        const p = document.createElement('div'); p.className = 'px-3 py-2 text-base2 text-gray-500'; p.textContent = 'No matching items.';
+        results.replaceChildren(p);
+      } else {
+        results.replaceChildren(...found.map((it) => {
+          const a = document.createElement('button');
+          a.type = 'button'; a.setAttribute('role', 'option');
+          a.className = 'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-base2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none';
+          const left = document.createElement('span'); left.className = 'min-w-0 truncate';
+          const nm = document.createElement('span'); nm.className = 'font-medium text-gray-900'; nm.textContent = it.name;
+          const sku = document.createElement('span'); sku.className = 'mono ml-2 text-gray-500'; sku.textContent = it.sku;
+          left.append(nm, sku);
+          const av = document.createElement('span'); av.className = 'shrink-0 text-xs2 tabular-nums ' + (it.on_hand > 0 ? 'text-gray-500' : 'text-red-700'); av.textContent = it.on_hand + ' available';
+          a.append(left, av);
+          a.addEventListener('click', () => addLine(it));
+          return a;
+        }));
+      }
+      results.classList.remove('hidden'); input.setAttribute('aria-expanded', 'true');
+    }, 180);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (found.length && !results.classList.contains('hidden')) addLine(found[0]); }
+    if (e.key === 'Escape') clear();
+    if (e.key === 'ArrowDown') { const f = results.querySelector('button'); if (f) { e.preventDefault(); f.focus(); } }
+  });
+  results.addEventListener('keydown', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (e.key === 'ArrowDown' && b.nextElementSibling) { e.preventDefault(); b.nextElementSibling.focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); (b.previousElementSibling || input).focus(); }
+  });
+  document.addEventListener('click', (e) => { if (!e.target.closest('#results') && e.target !== input) clear(); });
+
+  function addLine(it) {
+    clear(); input.value = ''; found = [];
+    const existing = lines.querySelector('tr[data-line="' + it.id + '"]');
+    if (existing) { const q = existing.querySelector('[name=qty]'); q.value = (parseInt(q.value, 10) || 0) + 1; recalc(); q.focus(); q.select(); return; }
+    if (lines.contains(emptyRow)) emptyRow.remove();
+    const tr = document.createElement('tr'); tr.dataset.line = it.id; tr.dataset.avail = it.on_hand;
+    const td = (child, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; if (typeof child === 'string') c.textContent = child; else if (child) c.appendChild(child); return c; };
+    const hidden = Object.assign(document.createElement('input'), { type: 'hidden', name: 'item_id', value: it.id });
+    const name = document.createElement('div'); name.className = 'font-medium text-gray-900'; name.textContent = it.name; name.appendChild(hidden);
+    const sku = document.createElement('div'); sku.className = 'mono text-xs2 font-normal text-gray-500'; sku.textContent = it.sku; name.appendChild(sku);
+    const qty = Object.assign(document.createElement('input'), { type: 'number', name: 'qty', min: 1, value: 1, className: 'input input-sm min-w-[5.5rem] text-right tabular-nums', required: true });
+    const price = Object.assign(document.createElement('input'), { type: 'number', name: 'unit_price', step: '0.01', min: 0, value: it.unit_price, className: 'input input-sm min-w-[5.5rem] text-right tabular-nums', readOnly: !canPrice });
+    const del = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-ghost btn-sm !px-1.5 text-gray-500 hover:text-red-700', title: 'Remove line' });
+    del.setAttribute('aria-label', 'Remove ' + it.name); del.innerHTML = '<i class="bi bi-x-lg"></i>';
+    del.addEventListener('click', () => { tr.remove(); recalc(); input.focus(); });
+    [qty, price].forEach((el) => el.addEventListener('input', recalc));
+    tr.append(td(name), td(String(it.on_hand), 'num avail'), td(qty), td(price), td('', 'num amt font-medium'), td(del, 'text-right'));
+    lines.appendChild(tr); recalc(); qty.focus(); qty.select();
+  }
+  recalc();
+})();
+</script>
+{% endblock %}
