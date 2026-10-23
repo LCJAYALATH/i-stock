@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, txn_badge, empty_row, pager with context %}
+{% block title %}Stock Ledger{% endblock %}
+{% block content %}
+{% call page_header("Stock ledger", '{:,}'.format(page.total) ~ ' movements') %}
+  <a class="btn btn-secondary" href="{{ url_for('main.transactions_export', **request.args) }}">Export Excel</a>
+{% endcall %}
+<form class="card mb-4 p-3" method="get"><div class="grid grid-cols-2 gap-3 md:grid-cols-12">
+  {% if request.args.item_id %}<input type="hidden" name="item_id" value="{{ request.args.item_id }}">{% endif %}
+  <div class="relative col-span-2 md:col-span-4"><i class="bi bi-search pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-gray-400"></i>
+    <input class="input pl-8" name="q" value="{{ request.args.q or '' }}" placeholder="SKU, item or reference" aria-label="Search"></div>
+  <div class="md:col-span-2"><select class="input" name="type" aria-label="Type"><option value="">All types</option>{% for t in ['IN','OUT','ADJUST'] %}<option {% if request.args.type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+  <div class="md:col-span-2"><input class="input" type="date" name="from" value="{{ request.args.get('from', '') }}" aria-label="From"></div>
+  <div class="md:col-span-2"><input class="input" type="date" name="to" value="{{ request.args.to or '' }}" aria-label="To"></div>
+  <div class="flex gap-2 md:col-span-2"><button class="btn btn-secondary flex-1">Apply</button><a class="btn btn-ghost" href="{{ url_for('main.transactions') }}">Reset</a></div>
+</div></form>
+<div class="card"><div class="table-wrap"><table class="table table-sm table-hover">
+  <thead><tr><th>When</th><th>Type</th><th>Item</th><th>Batch</th><th class="num">Qty</th><th class="num">Balance</th><th>Reference</th><th>Source</th><th>User</th></tr></thead>
+  <tbody>{% for t in page.items %}<tr><td class="whitespace-nowrap text-gray-500">{{ t.created_at|dt }}</td><td>{{ txn_badge(t.txn_type) }}</td>
+    <td><a href="{{ url_for('inventory.item_detail', item_id=t.item_id) }}">{{ t.item.name }}</a> <span class="mono text-xs2 text-gray-500">{{ t.item.sku }}</span></td>
+    <td class="mono">{{ t.batch.batch_no if t.batch else '' }}</td><td class="num font-medium text-gray-900">{{ t.quantity }}</td><td class="num">{{ t.balance_after }}</td>
+    <td>{{ t.reference or '' }}{% if t.client %} <span class="text-gray-500">· {{ t.client.name }}</span>{% endif %}{% if t.note %} <span class="text-xs2 text-gray-500">({{ t.note }})</span>{% endif %}</td>
+    <td><span class="badge badge-light">{{ t.source }}</span></td><td class="text-gray-500">{{ t.user.username if t.user else 'system' }}</td></tr>
+  {% else %}{{ empty_row(9, 'No movements.') }}{% endfor %}</tbody></table></div>
+  {{ pager(page, 'main.transactions', 'movements') }}
+</div>
+{% endblock %}
