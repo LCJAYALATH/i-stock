@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, status_badge, csrf, empty_row, stat, calc_row with context %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+{% call page_header("Analytics and forecasts", "Based on the last " ~ cfg.history_days ~ " days of sales") %}
+  <a class="btn btn-secondary" href="{{ url_for('analytics.report_reorder') }}">Export reorder report</a>
+  <form method="post" action="{{ url_for('analytics.recalc') }}">{{ csrf() }}<button class="btn btn-primary">Recalculate all items</button></form>
+{% endcall %}
+
+<div class="stats mb-5 grid-cols-2 md:grid-cols-4">
+  {{ stat('Average inventory turnover', (avg_turnover|num(1) ~ '×') if avg_turnover else '—', note='per year') }}
+  {{ stat('Forecast error, selected models', accuracy.selected_mae|num(2) if accuracy.selected_mae is not none else '—', note='MAE, units per day') }}
+  {{ stat('Dead stock items', dead|length, note='No sale in ' ~ cfg.get('dead_stock_days', 60) ~ '+ days') }}
+  {{ stat('Batches expiring', expiring|length, note='Within 30 days') }}
+</div>
+
+<div class="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
+  <section class="card min-w-0 xl:col-span-2"><div class="card-header"><h2 class="card-title">Sales revenue per day</h2><span class="card-sub">{{ currency }}</span></div>
+    <div class="card-body"><div class="chart-box"><canvas id="trend"></canvas></div></div></section>
+  <section class="card min-w-0"><div class="card-header"><h2 class="card-title">ABC classes by annual value</h2></div>
+    <div class="card-body"><div class="chart-box"><canvas id="abcChart"></canvas></div></div></section>
+</div>
+
+<section class="card mb-5">
+  <div class="card-header"><h2 class="card-title">Forecast model comparison</h2>
+    <span class="card-sub">Last {{ cfg.backtest_days }} days of each item held out; the model with the lower MAE is used for that item</span></div>
+  <div class="grid grid-cols-1 lg:grid-cols-2">
+    <div class="table-wrap border-b border-gray-200 lg:border-b-0 lg:border-r">
+      <table class="table">
+        <thead><tr><th>Model</th><th class="num">Avg MAE</th><th class="num">Avg MAPE</th><th class="num">Items using it</th></tr></thead>
+        <tbody>
+          <tr><td>Moving average ({{ cfg.sma_window }}-day)</td><td class="num">{{ accuracy.sma_mae|num(2) }}</td><td class="num">{{ accuracy.sma_mape|num(1) }}%</td><td class="num">{{ accuracy.SMA }}</td></tr>
+          <tr><td>Linear regression</td><td class="num">{{ accuracy.lr_mae|num(2) }}</td><td class="num">{{ accuracy.lr_mape|num(1) }}%</td><td class="num">{{ accuracy.LR }}</td></tr>
+        </tbody>
+        <tfoot><tr><td>Selected per item</td><td class="num">{{ accuracy.selected_mae|num(2) }}</td><td></td><td class="num">{{ accuracy.SMA + accuracy.LR }}</td></tr></tfoot>
+      </table>
+    </div>
+    <div class="table-wrap"><table class="calc"><tbody>
+      {{ calc_row('Mean absolute error', '\\mathrm{MAE} = \\frac{1}{n}\\sum_{t=1}^{n} \\lvert y_t - \\hat y_t \\rvert', None, '', 'Units per day') }}
+      {{ calc_row('Mean abs. % error', '\\mathrm{MAPE} = \\frac{100}{n}\\sum_{y_t \\neq 0} \\left\\lvert \\frac{y_t - \\hat y_t}{y_t} \\right\\rvert', None, '', 'Days with zero sales excluded') }}
+    </tbody></table></div>
+  </div>
+</section>
+
+<section class="card mb-5">
+  <div class="card-header"><h2 class="card-title">ABC classification and turnover</h2>
+    <span class="card-sub">A: top 80% of consumption value · B: next 15% · C: remaining 5%</span></div>
+  <div class="table-wrap border-b border-gray-200"><table class="calc"><tbody>
+    {{ calc_row('Annual value', 'V_i = \\frac{365}{T} \\sum_t q_{i,t}\\, c_i', None, '', 'T = ' ~ cfg.history_days ~ ' days, c = unit cost') }}
+    {{ calc_row('Turnover', '\\mathrm{Turnover}_i = \\frac{\\sum_t q_{i,t}}{\\bar I_i} \\times \\frac{365}{T}', None, '', 'Ī = average units on hand') }}
+    {{ calc_row('Days of inventory', '\\mathrm{DOI}_i = 365 / \\mathrm{Turnover}_i', None, '') }}
+  </tbody></table></div>
+  <div class="table-wrap"><table class="table table-sm table-hover">
+    <thead><tr><th>Class</th><th>Item</th><th class="num">Units sold</th><th class="num">Annual value</th><th class="num">Share</th><th class="num">Avg on hand</th><th class="num">Turnover</th><th class="num">DOI</th><th>Trend</th><th>Model</th><th class="num">Forecast 30d</th><th>Status</th></tr></thead>
+    <tbody>{% for r in pareto %}{% set a = r.analysis %}<tr>
+      <td class="font-mono font-medium {{ {'A':'text-gray-900','B':'text-gray-700','C':'text-gray-500'}[r.abc] }}">{{ r.abc }}</td>
+      <td class="min-w-[12rem]"><a href="{{ url_for('inventory.item_detail', item_id=r.item.id) }}">{{ r.item.name }}</a></td>
+      <td class="num">{{ r.units_sold|num }}</td><td class="num">{{ r.annual_value|num }}</td><td class="num">{{ r.value_share|num(1) }}%</td>
+      <td class="num">{{ r.avg_on_hand|num }}</td><td class="num">{{ r.turnover|num(1) if r.turnover else '—' }}</td><td class="num">{{ r.days_inventory|num if r.days_inventory else '—' }}</td>
+      <td class="whitespace-nowrap text-gray-600">{% if a.trend_slope > 0.02 %}Rising{% elif a.trend_slope < -0.02 %}Falling{% else %}Stable{% endif %}</td>
+      <td class="mono text-gray-600">{{ a.model }}</td><td class="num">{{ a.forecast_total|num }}</td><td>{{ status_badge(stock_status(r.item)) }}</td></tr>
+    {% else %}{{ empty_row(12, 'No sales history yet.') }}{% endfor %}</tbody></table></div>
+</section>
+
+<div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+  <section class="card"><div class="card-header"><h2 class="card-title">Dead stock</h2><span class="card-sub">No sale in {{ cfg.get('dead_stock_days', 60) }}+ days</span></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Value ({{ currency }})</th><th class="text-right">Last sale</th></tr></thead><tbody>
+    {% for d in dead %}<tr><td><a href="{{ url_for('inventory.item_detail', item_id=d.item.id) }}">{{ d.item.name }}</a></td><td class="num">{{ d.item.quantity_on_hand }} {{ d.item.unit }}</td><td class="num">{{ d.item.stock_value|money }}</td><td class="whitespace-nowrap text-right text-gray-600">{{ d.last_sale|dt('%Y-%m-%d') if d.last_sale else 'Never' }}</td></tr>
+    {% else %}{{ empty_row(4, 'None.') }}{% endfor %}</tbody></table></div></section>
+  <section class="card"><div class="card-header"><h2 class="card-title">Expiring batches</h2></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Item</th><th>Batch</th><th class="num">Qty</th><th class="text-right">Expiry</th><th class="num">Days</th></tr></thead><tbody>
+    {% for b in expiring %}<tr><td>{{ b.item.name }}</td><td class="mono">{{ b.batch_no }}</td><td class="num">{{ b.quantity }}</td><td class="whitespace-nowrap text-right">{{ b.expiry_date }}</td><td class="num {{ 'font-medium text-red-700' if b.days_to_expiry < 0 else 'text-amber-700' }}">{{ b.days_to_expiry }}</td></tr>
+    {% else %}{{ empty_row(5, 'None.') }}{% endfor %}</tbody></table></div></section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+const compact = (v) => new Intl.NumberFormat('en', { notation: 'compact' }).format(v);
+const t = {{ trend|tojson }};
+new Chart(document.getElementById('trend'), { type: 'line',
+  data: { labels: t.labels, datasets: [{ label: 'Revenue', data: t.revenue, borderColor: ISTOCK_COLORS.accent, backgroundColor: ISTOCK_COLORS.accentSoft, fill: true, pointRadius: 0, borderWidth: 1.5 }] },
+  options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } },
+    scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0 } }, y: { beginAtZero: true, ticks: { callback: compact } } } } });
+const abc = {{ {'A': abc.A.value, 'B': abc.B.value, 'C': abc.C.value}|tojson }};
+const abcN = {{ {'A': abc.A.count, 'B': abc.B.count, 'C': abc.C.count}|tojson }};
+new Chart(document.getElementById('abcChart'), { type: 'bar',
+  data: { labels: ['A (' + abcN.A + ' items)', 'B (' + abcN.B + ')', 'C (' + abcN.C + ')'], datasets: [{ label: 'Annual value', data: [abc.A, abc.B, abc.C], backgroundColor: [ISTOCK_COLORS.accent, '#818cf8', '#c7d2fe'], maxBarThickness: 48 }] },
+  options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: compact } } } } });
+</script>
+{% endblock %}
