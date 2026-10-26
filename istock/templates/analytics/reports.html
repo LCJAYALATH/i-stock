@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header with context %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+{% call page_header("Reports", "Exports open in a new tab. Order documents (PO, picking list, invoice) are on each order's page.") %}{% endcall %}
+{% set reports = [
+  ('Inventory list', 'Excel', 'Every active item with stock, reorder point and status' ~ (', with valuation' if current_user.can_view_financials else ''), url_for('analytics.report_inventory'), True),
+  ('Stock ledger', 'Excel', 'All stock movements. Apply filters on the ledger page first to narrow the export.', url_for('main.transactions_export'), True),
+  ('Physical count sheet', 'PDF', 'Blind count sheet sorted by bin, with scannable barcodes', url_for('inventory.count_sheet'), True),
+  ('Item labels', 'PDF', 'QR and Code128 labels for every item, 21 per A4 sheet', url_for('inventory.labels'), True),
+  ('Reorder recommendations', 'Excel', 'Safety stock, reorder point, forecast and recommended order quantity', url_for('analytics.report_reorder'), current_user.has_role('manager')),
+] %}
+<div class="card"><div class="table-wrap"><table class="table table-hover">
+  <thead><tr><th>Report</th><th>Description</th><th>Format</th><th></th></tr></thead>
+  <tbody>
+  {% for title, fmt, desc, link, allowed in reports if allowed %}
+    <tr><td class="whitespace-nowrap font-medium text-gray-900">{{ title }}</td><td class="min-w-[16rem] text-gray-600">{{ desc }}</td><td><span class="badge {{ 'badge-success' if fmt == 'Excel' else 'badge-danger' }} font-mono">{{ 'XLSX' if fmt == 'Excel' else 'PDF' }}</span></td>
+      <td class="text-right"><a class="btn btn-secondary btn-sm" href="{{ link }}" target="_blank">{% if fmt == 'PDF' %}<i class="bi bi-file-earmark-pdf"></i> Open{% else %}<i class="bi bi-download"></i> Download{% endif %}</a></td></tr>
+  {% endfor %}
+  </tbody></table></div></div>
+{% endblock %}
