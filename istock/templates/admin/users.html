@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header with context %}
+{% block title %}Users{% endblock %}
+{% block content %}
+{% call page_header("Users & roles") %}<a class="btn btn-primary" href="{{ url_for('analytics.user_form') }}">New user</a>{% endcall %}
+<div class="card mb-5"><div class="table-wrap"><table class="table table-hover">
+  <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+  <tbody>{% for u in users %}<tr>
+    <td class="mono">{{ u.username }}</td><td class="font-medium text-gray-900">{{ u.full_name }}</td>
+    <td>{{ u.role_label }}</td>
+    <td>{% if u.is_active_user %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-secondary">Disabled</span>{% endif %}</td>
+    <td class="whitespace-nowrap text-gray-500">{{ u.last_login_at|dt }}</td><td class="text-right"><a class="btn btn-ghost btn-sm" href="{{ url_for('analytics.user_form', user_id=u.id) }}">Edit</a></td></tr>{% endfor %}</tbody></table></div></div>
+<section class="card"><div class="card-header"><h2 class="card-title">Role permissions</h2></div><div class="table-wrap"><table class="table table-sm">
+  <thead><tr><th>Capability</th><th class="text-center">Warehouse staff</th><th class="text-center">Office manager</th><th class="text-center">Administrator</th></tr></thead><tbody>
+  {% for cap, s, m, a in [('Scan stock in/out, view inventory', 1,1,1), ('Create & dispatch client orders, receive POs', 1,1,1), ('View costs, stock value & financial reports', 0,1,1),
+     ('Edit items & prices, adjust stock', 0,1,1), ('Approve / send purchase orders', 0,1,1), ('Analytics & forecasts', 0,1,1), ('Manage users & system settings', 0,0,1)] %}
+  <tr><td>{{ cap }}</td>{% for v in [s,m,a] %}<td class="text-center">{% if v %}<span class="text-gray-900">Yes</span>{% else %}<span class="text-gray-400">No</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table></div></section>
+{% endblock %}
