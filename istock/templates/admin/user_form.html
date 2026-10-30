@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, breadcrumb, csrf with context %}
+{% block title %}{{ user.full_name if user.id else 'New user' }}{% endblock %}
+{% block content %}
+{{ breadcrumb([('Users', url_for('analytics.users')), (user.username if user.id else 'New user', None)]) }}
+{% call page_header(user.full_name if user.id else 'New user', 'Edit account, role and password' if user.id else 'Create an account and assign a role') %}{% endcall %}
+<form method="post" class="card max-w-5xl">{{ csrf() }}
+  <div class="form-section">
+    <div class="form-section-head"><h2>Account</h2><p>The username is used to sign in.</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-3"><label class="label" for="username">Username <span class="req">*</span></label><input class="input font-mono" id="username" name="username" value="{{ user.username or '' }}" autocomplete="off" required></div>
+      <div class="sm:col-span-3"><label class="label" for="full_name">Full name <span class="req">*</span></label><input class="input" id="full_name" name="full_name" value="{{ user.full_name or '' }}" required></div>
+      <div class="sm:col-span-6"><label class="label" for="email">Email</label><input class="input" id="email" type="email" name="email" value="{{ user.email or '' }}"></div>
+    </div>
+  </div>
+  <div class="form-section">
+    <div class="form-section-head"><h2>Role</h2><p>Controls what the user can see and do. See the permissions table on the Users page.</p></div>
+    <div class="form-fields">
+      <fieldset class="sm:col-span-6"><legend class="sr-only">Role</legend>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {% set role_notes = {'staff': 'Scan, pick, receive. No costs.', 'manager': 'Approve POs, prices, analytics.', 'admin': 'Everything, plus users and settings.'} %}
+        {% for k, v in roles.items() %}
+          <label class="flex cursor-pointer items-start gap-2 rounded-xl border border-gray-300 px-3 py-2.5 has-[:checked]:border-accent-600 has-[:checked]:bg-accent-50/60 has-[:checked]:ring-1 has-[:checked]:ring-accent-600">
+            <input type="radio" class="mt-0.5 h-4 w-4 border-gray-400 text-accent-600 focus:ring-accent-500" name="role" value="{{ k }}" {% if user.role == k or (not user.role and loop.first) %}checked{% endif %}>
+            <span><span class="block text-base2 font-medium text-gray-900">{{ v }}</span><span class="block text-xs2 text-gray-500">{{ role_notes.get(k, '') }}</span></span>
+          </label>
+        {% endfor %}
+        </div>
+      </fieldset>
+      {% if user.id %}<div class="sm:col-span-6"><label class="flex items-center gap-2 text-base2 font-medium text-gray-700" for="a"><input class="check" type="checkbox" name="is_active" value="1" id="a" {% if user.is_active_user %}checked{% endif %}> Account active</label><p class="help ml-6">Inactive users cannot sign in.</p></div>{% endif %}
+    </div>
+  </div>
+  <div class="form-section border-b-0">
+    <div class="form-section-head"><h2>Password</h2><p>{{ 'Leave blank to keep the current password.' if user.id else 'The user can sign in with this password.' }}</p></div>
+    <div class="form-fields">
+      <div class="sm:col-span-3"><label class="label" for="password">{{ 'New password' if user.id else 'Password' }}{% if not user.id %} <span class="req">*</span>{% endif %}</label><input class="input" id="password" type="password" name="password" autocomplete="new-password" minlength="8" {% if not user.id %}required{% endif %}>
+        <p class="help">At least 8 characters.</p></div>
+    </div>
+  </div>
+  <div class="card-footer justify-end"><a class="btn btn-ghost" href="{{ url_for('analytics.users') }}">Cancel</a><button class="btn btn-primary">{{ 'Save changes' if user.id else 'Create user' }}</button></div>
+</form>
+{% endblock %}
