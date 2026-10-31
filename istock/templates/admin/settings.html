@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import page_header, csrf with context %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+{% call page_header("System settings", "Saving recalculates every item's safety stock, reorder point and forecast") %}
+  <form method="post" action="{{ url_for('analytics.recalc') }}">{{ csrf() }}<button class="btn btn-secondary">Recalculate now</button></form>
+{% endcall %}
+{% set groups = [
+  ('Company', 'Printed on purchase orders, invoices, picking lists and labels.', ['company_name', 'company_address', 'currency']),
+  ('Forecasting', 'How demand history is read and which model is chosen.', ['history_days', 'forecast_horizon', 'sma_window', 'backtest_days']),
+  ('Replenishment', 'Inputs to safety stock, reorder point and order quantity.', ['default_service_level', 'default_lead_time', 'review_period', 'auto_draft_po']),
+  ('Costs (EOQ)', 'Used for the economic order quantity shown on each item.', ['ordering_cost', 'holding_rate']),
+  ('Alerts', 'Thresholds for overstock, dead stock and expiry warnings.', ['overstock_days', 'dead_stock_days', 'expiry_warning_days']),
+] %}
+{% set units = {'history_days': 'days', 'forecast_horizon': 'days', 'sma_window': 'days', 'backtest_days': 'days', 'default_lead_time': 'days',
+  'review_period': 'days', 'overstock_days': 'days', 'dead_stock_days': 'days', 'expiry_warning_days': 'days', 'ordering_cost': currency, 'holding_rate': '× cost / yr'} %}
+<form method="post" class="card max-w-5xl">{{ csrf() }}
+  {% for title, desc, keys in groups %}
+  <div class="form-section {{ 'border-b-0' if loop.last }}">
+    <div class="form-section-head"><h2>{{ title }}</h2><p>{{ desc }}</p></div>
+    <div class="form-fields">
+      {% for key in keys if key in settings %}{% set s = settings[key] %}
+      <div class="{{ 'sm:col-span-6' if s.type == 'str' and key != 'currency' else 'sm:col-span-3' }}">
+        <label class="label" for="{{ key }}">{{ s.label|replace(" (days)", "")|replace(" (1 = yes)", "")|replace(" (for EOQ)", "") }}</label>
+        {% if key == 'auto_draft_po' %}
+          <select class="input" id="{{ key }}" name="{{ key }}"><option value="1" {% if s.value == 1 %}selected{% endif %}>Yes, draft a PO automatically</option><option value="0" {% if s.value != 1 %}selected{% endif %}>No, show an alert only</option></select>
+        {% else %}
+          <div class="relative">
+            <input class="input {{ 'pr-24' if units.get(key) }}" id="{{ key }}" name="{{ key }}" value="{{ s.value }}" {% if s.type != 'str' %}type="number" step="any" min="0"{% endif %}{% if key == 'default_service_level' %} min="0.5" max="0.999"{% endif %}>
+            {% if units.get(key) %}<span class="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs2 text-gray-400">{{ units[key] }}</span>{% endif %}
+          </div>
+        {% endif %}
+        <p class="help mono !text-[11px] !text-gray-400">{{ key }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <div class="card-footer justify-end"><button class="btn btn-primary">Save settings</button></div>
+</form>
+{% endblock %}
